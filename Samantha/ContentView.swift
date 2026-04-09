@@ -55,6 +55,17 @@ struct ContentView: View {
                 tabButton("Logs", tab: .logs)
 
                 Spacer()
+
+                // Command Center button
+                Button {
+                    WindowManager.shared.openCommandCenter(proactiveService: proactiveService)
+                } label: {
+                    Image(systemName: "rectangle.expand.vertical")
+                        .font(.caption)
+                        .foregroundStyle(.purple)
+                }
+                .buttonStyle(.plain)
+                .help("Open Command Center")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
