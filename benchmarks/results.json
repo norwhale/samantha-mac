@@ -1,0 +1,162 @@
+{
+  "timestamp": "2026-04-10T02:39:46.106576",
+  "claude_model": "claude-haiku-4-5-20251001",
+  "ollama_model": "gemma4:31b",
+  "ollama_available": true,
+  "tests": [
+    {
+      "id": "simple_greeting",
+      "category": "Simple",
+      "prompt": "こんにちは、今日の調子はどう？",
+      "claude_solo": {
+        "latency": 1.28,
+        "quality_score": 7,
+        "response_length": 104
+      },
+      "gemma_solo": {
+        "latency": 17.25,
+        "quality_score": 6,
+        "response_length": 33,
+        "tokens_per_sec": 17.0
+      },
+      "orchestrated": {
+        "latency": 18.11,
+        "quality_score": 5,
+        "response_length": 33,
+        "path": "gemma_direct"
+      }
+    },
+    {
+      "id": "factual_question",
+      "category": "Factual",
+      "prompt": "ブルガリアの首都と人口を教えてください。",
+      "claude_solo": {
+        "latency": 1.4,
+        "quality_score": 9,
+        "response_length": 109
+      },
+      "gemma_solo": {
+        "latency": 9.02,
+        "quality_score": 7,
+        "response_length": 17,
+        "tokens_per_sec": 16.3
+      },
+      "orchestrated": {
+        "latency": 8.28,
+        "quality_score": 7,
+        "response_length": 17,
+        "path": "gemma_direct"
+      }
+    },
+    {
+      "id": "coding_help",
+      "category": "Technical",
+      "prompt": "Pythonでフィボナッチ数列を再帰で実装する方法を簡潔に教えてください。",
+      "claude_solo": {
+        "latency": 2.28,
+        "quality_score": 8,
+        "response_length": 687
+      },
+      "gemma_solo": {
+        "latency": 30.21,
+        "quality_score": 8,
+        "response_length": 557,
+        "tokens_per_sec": 16.5
+      },
+      "orchestrated": {
+        "latency": 31.69,
+        "quality_score": 8,
+        "response_length": 186,
+        "path": "gemma_direct"
+      }
+    },
+    {
+      "id": "medical_question",
+      "category": "Medical",
+      "prompt": "大脳皮質の機能局在について、運動野と感覚野の違いを簡潔に説明してください。",
+      "claude_solo": {
+        "latency": 3.13,
+        "quality_score": 9,
+        "response_length": 394
+      },
+      "gemma_solo": {
+        "latency": 32.92,
+        "quality_score": 8,
+        "response_length": 71,
+        "tokens_per_sec": 15.9
+      },
+      "orchestrated": {
+        "latency": 32.68,
+        "quality_score": 8,
+        "response_length": 93,
+        "path": "gemma_direct"
+      }
+    },
+    {
+      "id": "analysis_task",
+      "category": "Analysis",
+      "prompt": "AIが医療に与える影響を、技術・倫理・経済の3つの観点から簡潔に分析してください。",
+      "claude_solo": {
+        "latency": 3.77,
+        "quality_score": 9,
+        "response_length": 377
+      },
+      "gemma_solo": {
+        "latency": 32.02,
+        "quality_score": 8,
+        "response_length": 285,
+        "tokens_per_sec": 16.3
+      },
+      "orchestrated": {
+        "latency": 32.09,
+        "quality_score": 8,
+        "response_length": 255,
+        "path": "gemma_direct"
+      }
+    },
+    {
+      "id": "creative_task",
+      "category": "Creative",
+      "prompt": "ブルガリアで医学を学ぶ日本人のショートストーリーを5文で書いてください。",
+      "claude_solo": {
+        "latency": 2.88,
+        "quality_score": 8,
+        "response_length": 226
+      },
+      "gemma_solo": {
+        "latency": 27.02,
+        "quality_score": 8,
+        "response_length": 185,
+        "tokens_per_sec": 16.0
+      },
+      "orchestrated": {
+        "latency": 32.23,
+        "quality_score": 3,
+        "response_length": 130,
+        "path": "gemma_direct"
+      }
+    },
+    {
+      "id": "reasoning_task",
+      "category": "Reasoning",
+      "prompt": "もし人間の寿命が200歳になったら、医療制度はどう変わるべきか、論理的に考えてください。",
+      "claude_solo": {
+        "latency": 4.33,
+        "quality_score": 8,
+        "response_length": 450
+      },
+      "gemma_solo": {
+        "latency": 32.22,
+        "quality_score": 8,
+        "response_length": 86,
+        "tokens_per_sec": 16.2
+      },
+      "orchestrated": {
+        "latency": 32.68,
+        "quality_score": 8,
+        "response_length": 95,
+        "path": "gemma_direct"
+      }
+    }
+  ]
+}
