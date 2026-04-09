@@ -83,7 +83,7 @@ final class ProactiveService {
         // 2. Get recent activity summary
         let activity = await ActivityLogger.recentSummary(hours: 24)
 
-        // 3. Change detection — skip API call if nothing changed
+        // 3. Change detection + cooldown (single MainActor access)
         let contextString = "\(time)\(apps)\(battery)\(front)\(activity)"
         let newHash = contextString.hashValue
 
@@ -92,19 +92,14 @@ final class ProactiveService {
                 print("[Proactive] No context change, skipping")
                 return true
             }
+            if Date().timeIntervalSince(lastSuggestionTime) < minSuggestionGap {
+                print("[Proactive] Cooldown active, skipping")
+                return true
+            }
             lastContextHash = newHash
             return false
         }
         if shouldSkip { return }
-
-        // 4. Cooldown check
-        let cooldownActive = await MainActor.run {
-            Date().timeIntervalSince(lastSuggestionTime) < minSuggestionGap
-        }
-        if cooldownActive {
-            print("[Proactive] Cooldown active, skipping")
-            return
-        }
 
         // 5. Ask Claude for analysis
         let prompt = """

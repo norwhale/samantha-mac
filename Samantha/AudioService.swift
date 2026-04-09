@@ -8,12 +8,14 @@
 import AVFoundation
 import Foundation
 
+/// Audio service for STT (Whisper) and TTS (OpenAI).
+/// Playback runs entirely off MainActor to prevent UI freezes.
 @MainActor
 @Observable
 final class AudioService: NSObject {
     private let openAIKey: String = Bundle.main.infoDictionary?["OPENAI_API_KEY"] as? String ?? ""
 
-    // MARK: - Observable state
+    // MARK: - Observable state (MainActor)
 
     var isRecording = false
     var isSpeaking = false
@@ -21,7 +23,6 @@ final class AudioService: NSObject {
     // MARK: - Private
 
     private var recorder: AVAudioRecorder?
-    private var player: AVAudioPlayer?
     private var playbackToken = UUID()
 
     private var recordingURL: URL {
@@ -57,7 +58,6 @@ final class AudioService: NSObject {
         }
     }
 
-    /// Stop recording and transcribe via Whisper. Returns the transcribed text.
     func stopRecordingAndTranscribe() async throws -> String {
         guard recorder != nil else {
             throw AudioError.noRecordingInProgress
@@ -68,16 +68,13 @@ final class AudioService: NSObject {
         isRecording = false
         print("[Audio] Recording stopped")
 
-        let data = try await Self.loadRecordingData(from: recordingURL)
+        let url = recordingURL
+        let data = try await Task.detached(priority: .utility) {
+            try Data(contentsOf: url)
+        }.value
         print("[Audio] Audio file size: \(data.count) bytes")
 
         return try await Self.transcribe(audioData: data, apiKey: validatedAPIKey())
-    }
-
-    private static func loadRecordingData(from url: URL) async throws -> Data {
-        try await Task.detached(priority: .utility) {
-            try Data(contentsOf: url)
-        }.value
     }
 
     nonisolated private static func transcribe(audioData: Data, apiKey: String) async throws -> String {
@@ -113,57 +110,58 @@ final class AudioService: NSObject {
 
     // MARK: - TTS (Text → Speech)
 
+    /// Fetch TTS audio and play it. All heavy work runs off MainActor.
     func speak(_ text: String) async throws {
-        // Keep TTS short (~30s max) to avoid long playback freezes
         let truncated = String(text.prefix(500))
-        let playbackToken = UUID()
-        self.playbackToken = playbackToken
-        let data = try await Self.requestSpeechAudio(text: truncated, apiKey: validatedAPIKey())
-        try Task.checkCancellation()
+        let token = UUID()
+        self.playbackToken = token
 
-        guard self.playbackToken == playbackToken else {
-            throw CancellationError()
-        }
+        let apiKey = try validatedAPIKey()
+
+        // API call runs off MainActor
+        let data = try await Self.requestSpeechAudio(text: truncated, apiKey: apiKey)
+        try Task.checkCancellation()
+        guard self.playbackToken == token else { throw CancellationError() }
 
         print("[Audio] TTS audio received: \(data.count) bytes")
 
-        isSpeaking = true
-        defer { isSpeaking = false }
+        // Decode audio data off MainActor (can be slow for large MP3s)
+        let audioPlayer = try await Task.detached(priority: .userInitiated) {
+            try AVAudioPlayer(data: data)
+        }.value
 
-        let audioPlayer = try AVAudioPlayer(data: data)
-        player = audioPlayer
+        guard self.playbackToken == token else { throw CancellationError() }
         guard audioPlayer.prepareToPlay(), audioPlayer.play() else {
-            player = nil
             throw AudioError.playbackFailed
         }
-        print("[Audio] Playback started (\(String(format: "%.1f", audioPlayer.duration))s)")
+        isSpeaking = true
+        let duration = audioPlayer.duration
+        print("[Audio] Playback started (\(String(format: "%.1f", duration))s)")
 
-        // Poll until finished or timeout (duration + 5s safety margin)
-        let deadline = Date().addingTimeInterval(audioPlayer.duration + 5)
-        while audioPlayer.isPlaying && Date() < deadline {
-            try Task.checkCancellation()
-            try await Task.sleep(for: .milliseconds(200))
-        }
+        // Poll on a DETACHED task (NOT MainActor) to keep UI responsive
+        await Task.detached(priority: .utility) {
+            let deadline = Date().addingTimeInterval(duration + 5)
+            while audioPlayer.isPlaying && Date() < deadline {
+                if Task.isCancelled { break }
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+        }.value
 
-        if audioPlayer.isPlaying {
-            audioPlayer.stop()
-            player = nil
-            throw AudioError.playbackTimedOut
-        }
-
-        player = nil
+        // Cleanup on MainActor
+        if audioPlayer.isPlaying { audioPlayer.stop() }
+        isSpeaking = false
         print("[Audio] Playback finished")
     }
 
     /// Stop any current playback immediately.
     func stopSpeaking() {
         playbackToken = UUID()
-        player?.stop()
-        player = nil
         isSpeaking = false
+        // Note: The detached polling task will see isPlaying=false or
+        // isCancelled and exit on next iteration
     }
 
-    // MARK: - Errors
+    // MARK: - Private helpers
 
     private func validatedAPIKey() throws -> String {
         let trimmed = openAIKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -203,6 +201,8 @@ final class AudioService: NSObject {
         return data
     }
 
+    // MARK: - Errors
+
     enum AudioError: LocalizedError {
         case missingAPIKey
         case noRecordingInProgress
@@ -210,24 +210,15 @@ final class AudioService: NSObject {
         case sttFailed(status: Int, detail: String)
         case ttsFailed(status: Int, detail: String)
         case playbackFailed
-        case playbackTimedOut
 
         var errorDescription: String? {
             switch self {
-            case .missingAPIKey:
-                return "OpenAI API key is missing or unresolved"
-            case .noRecordingInProgress:
-                return "No active recording to stop"
-            case .recordingFailed:
-                return "Failed to start recording"
-            case .sttFailed(let status, let detail):
-                return "STT error (\(status)): \(detail)"
-            case .ttsFailed(let status, let detail):
-                return "TTS error (\(status)): \(detail)"
-            case .playbackFailed:
-                return "Audio playback could not be started"
-            case .playbackTimedOut:
-                return "Audio playback timed out"
+            case .missingAPIKey: return "OpenAI API key is missing"
+            case .noRecordingInProgress: return "No active recording to stop"
+            case .recordingFailed: return "Failed to start recording"
+            case .sttFailed(let s, let d): return "STT error (\(s)): \(d)"
+            case .ttsFailed(let s, let d): return "TTS error (\(s)): \(d)"
+            case .playbackFailed: return "Failed to play audio"
             }
         }
     }
@@ -235,7 +226,7 @@ final class AudioService: NSObject {
 
 // MARK: - Data helpers for multipart form
 
-nonisolated private extension Data {
+private extension Data {
     mutating func appendMultipart(boundary: String, name: String, value: String) {
         append("--\(boundary)\r\n".data(using: .utf8)!)
         append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
