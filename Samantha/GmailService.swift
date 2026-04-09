@@ -5,6 +5,7 @@
 //  Created by 鯨井優一 on 2026/04/09.
 //
 
+import AppKit
 import Foundation
 import Network
 
