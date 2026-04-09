@@ -8,6 +8,13 @@
 import Foundation
 import UserNotifications
 
+/// A single proactive suggestion with its timestamp.
+struct Suggestion: Identifiable {
+    let id = UUID()
+    let timestamp: Date
+    let text: String
+}
+
 @Observable
 final class ProactiveService {
 
@@ -15,6 +22,9 @@ final class ProactiveService {
 
     /// Non-nil when Samantha has a proactive suggestion to show.
     var pendingSuggestion: String?
+
+    /// Full history of suggestions (newest first).
+    var suggestionHistory: [Suggestion] = []
 
     // MARK: - Configuration
 
@@ -135,10 +145,18 @@ final class ProactiveService {
 
             print("[Proactive] Suggestion: \(trimmed)")
 
-            // 6. Surface the suggestion
+            // 6. Surface the suggestion and save to history
             await MainActor.run {
                 pendingSuggestion = trimmed
                 lastSuggestionTime = Date()
+                suggestionHistory.insert(
+                    Suggestion(timestamp: Date(), text: trimmed),
+                    at: 0
+                )
+                // Keep only last 50 suggestions
+                if suggestionHistory.count > 50 {
+                    suggestionHistory = Array(suggestionHistory.prefix(50))
+                }
             }
             await postNotification(trimmed)
 

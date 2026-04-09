@@ -25,7 +25,7 @@ struct SamanthaApp: App {
 
 // MARK: - App Delegate (notifications + lifecycle)
 
-class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Request notification permission

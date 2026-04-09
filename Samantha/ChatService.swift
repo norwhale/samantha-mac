@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct ChatService {
+nonisolated struct ChatService {
     private static let apiKey: String = Bundle.main.infoDictionary?["ANTHROPIC_API_KEY"] as? String ?? ""
     private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let model = "claude-haiku-4-5-20251001"
@@ -135,6 +135,7 @@ struct ChatService {
                    let command = call.input["command"] as? String
                 {
                     result = await executeShellCommand(command)
+                    ActivityLogger.logTool(command, result: result)
                 } else {
                     result = "Unknown tool: \(call.name)"
                 }
@@ -156,6 +157,7 @@ struct ChatService {
     // MARK: - API call
 
     private static func callAPI(system: String, messages: [[String: Any]]) async throws -> [String: Any] {
+        let apiKey = try validatedAPIKey()
         let body: [String: Any] = [
             "model": model,
             "max_tokens": 1024,
@@ -188,6 +190,14 @@ struct ChatService {
     }
 
     // MARK: - Shell execution (async with timeout)
+
+    private static func validatedAPIKey() throws -> String {
+        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("$(") else {
+            throw ChatError.missingAPIKey
+        }
+        return trimmed
+    }
 
     /// Run a shell command with a timeout. Never blocks the main thread.
     private static func executeShellCommand(_ command: String) async -> String {
@@ -274,6 +284,7 @@ struct ChatService {
     enum ChatError: LocalizedError {
         case api(status: Int, detail: String)
         case emptyResponse
+        case missingAPIKey
 
         var errorDescription: String? {
             switch self {
@@ -281,6 +292,8 @@ struct ChatService {
                 return "API error (\(status)): \(detail)"
             case .emptyResponse:
                 return "Empty response from API"
+            case .missingAPIKey:
+                return "Anthropic API key is missing or unresolved"
             }
         }
     }

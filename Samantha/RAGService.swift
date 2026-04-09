@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct RAGService {
+nonisolated struct RAGService {
     private static let openAIKey: String = Bundle.main.infoDictionary?["OPENAI_API_KEY"] as? String ?? ""
     private static let embeddingEndpoint = URL(string: "https://api.openai.com/v1/embeddings")!
     private static let embeddingModel = "text-embedding-3-small"
@@ -16,15 +16,45 @@ struct RAGService {
     private static let relevanceThreshold: Double = 0.4
 
     /// A blog article chunk with its precomputed embedding vector.
-    struct Document {
+    struct Document: Sendable {
         let filename: String
         let text: String
-        var embedding: [Double] = []
+        let embedding: [Double]
     }
 
     // MARK: - Cache
 
-    private static var cachedDocuments: [Document]?
+    private actor DocumentCache {
+        private var cachedDocuments: [Document]?
+        private var loadingTask: Task<[Document], any Error>?
+
+        func documents(using loader: @Sendable @escaping () async throws -> [Document]) async throws -> [Document] {
+            if let cachedDocuments {
+                return cachedDocuments
+            }
+
+            if let loadingTask {
+                return try await loadingTask.value
+            }
+
+            let loadingTask = Task {
+                try await loader()
+            }
+            self.loadingTask = loadingTask
+
+            do {
+                let documents = try await loadingTask.value
+                cachedDocuments = documents
+                self.loadingTask = nil
+                return documents
+            } catch {
+                self.loadingTask = nil
+                throw error
+            }
+        }
+    }
+
+    private static let cache = DocumentCache()
 
     // MARK: - Public API
 
@@ -61,30 +91,29 @@ struct RAGService {
     // MARK: - Document Loading
 
     private static func loadDocuments() async throws -> [Document] {
-        if let cached = cachedDocuments { return cached }
+        try await cache.documents {
+            let mdFiles = findMarkdownFiles()
+            print("[RAG] Found \(mdFiles.count) markdown file(s) in bundle")
 
-        let mdFiles = findMarkdownFiles()
-        print("[RAG] Found \(mdFiles.count) markdown file(s) in bundle")
+            var docs: [Document] = []
+            for file in mdFiles {
+                do {
+                    let text = try String(contentsOf: file, encoding: .utf8)
+                    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
 
-        var docs: [Document] = []
-        for file in mdFiles {
-            do {
-                let text = try String(contentsOf: file, encoding: .utf8)
-                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-
-                let truncated = String(text.prefix(8000))
-                let vector = try await embed(text: truncated)
-                let doc = Document(filename: file.lastPathComponent, text: text, embedding: vector)
-                docs.append(doc)
-                print("[RAG] Embedded: \(file.lastPathComponent) (\(text.count) chars)")
-            } catch {
-                print("[RAG] Failed to load \(file.lastPathComponent): \(error)")
+                    let truncated = String(text.prefix(8000))
+                    let vector = try await embed(text: truncated)
+                    let doc = Document(filename: file.lastPathComponent, text: text, embedding: vector)
+                    docs.append(doc)
+                    print("[RAG] Embedded: \(file.lastPathComponent) (\(text.count) chars)")
+                } catch {
+                    print("[RAG] Failed to load \(file.lastPathComponent): \(error)")
+                }
             }
-        }
 
-        print("[RAG] Total documents embedded: \(docs.count)")
-        cachedDocuments = docs
-        return docs
+            print("[RAG] Total documents embedded: \(docs.count)")
+            return docs
+        }
     }
 
     /// Try multiple strategies to locate .md/.txt files in the app bundle.
@@ -93,7 +122,7 @@ struct RAGService {
         if let urls = Bundle.main.urls(forResourcesWithExtension: "md", subdirectory: "BlogData"), !urls.isEmpty {
             print("[RAG] Strategy 1 (subdirectory 'BlogData'): found \(urls.count) .md files")
             let txt = Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: "BlogData") ?? []
-            return urls + txt
+            return filterRelevantDocuments(urls + txt)
         }
 
         // Strategy 2: url(forResource:) for the folder
@@ -103,7 +132,7 @@ struct RAGService {
                 let filtered = files.filter { ["md", "txt"].contains($0.pathExtension.lowercased()) }
                 if !filtered.isEmpty {
                     print("[RAG] Strategy 2 (folder reference): found \(filtered.count) files")
-                    return filtered
+                    return filterRelevantDocuments(filtered)
                 }
             }
         }
@@ -112,7 +141,7 @@ struct RAGService {
         if let urls = Bundle.main.urls(forResourcesWithExtension: "md", subdirectory: nil), !urls.isEmpty {
             print("[RAG] Strategy 3 (all .md in bundle root): found \(urls.count) files")
             let txt = Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: nil) ?? []
-            return urls + txt
+            return filterRelevantDocuments(urls + txt)
         }
 
         // Strategy 4: Walk the bundle Resources directory
@@ -129,12 +158,23 @@ struct RAGService {
         }
         if !found.isEmpty {
             print("[RAG] Strategy 4 (recursive walk): found \(found.count) files")
-            return found
+            return filterRelevantDocuments(found)
         }
 
         print("[RAG] WARNING: No markdown files found in bundle via any strategy")
         print("[RAG] Bundle path: \(Bundle.main.bundlePath)")
         return []
+    }
+
+    private static func filterRelevantDocuments(_ urls: [URL]) -> [URL] {
+        urls.filter { url in
+            switch url.lastPathComponent.lowercased() {
+            case "readme.md":
+                return false
+            default:
+                return true
+            }
+        }
     }
 
     // MARK: - OpenAI Embedding
@@ -152,13 +192,14 @@ struct RAGService {
     }
 
     private static func embed(text: String) async throws -> [Double] {
+        let apiKey = try validatedAPIKey()
         let body = EmbeddingRequest(model: embeddingModel, input: text)
 
         var request = URLRequest(url: embeddingEndpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue("Bearer \(openAIKey)", forHTTPHeaderField: "authorization")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
         request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -178,6 +219,14 @@ struct RAGService {
 
     // MARK: - Cosine Similarity
 
+    private static func validatedAPIKey() throws -> String {
+        let trimmed = openAIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("$(") else {
+            throw RAGError.missingAPIKey
+        }
+        return trimmed
+    }
+
     private static func cosineSimilarity(_ a: [Double], _ b: [Double]) -> Double {
         guard a.count == b.count, !a.isEmpty else { return 0 }
         var dot = 0.0, normA = 0.0, normB = 0.0
@@ -193,11 +242,14 @@ struct RAGService {
     // MARK: - Errors
 
     enum RAGError: LocalizedError {
+        case missingAPIKey
         case embeddingFailed(status: Int, detail: String)
         case emptyEmbedding
 
         var errorDescription: String? {
             switch self {
+            case .missingAPIKey:
+                return "OpenAI API key is missing or unresolved"
             case .embeddingFailed(let status, let detail):
                 return "Embedding API error (\(status)): \(detail)"
             case .emptyEmbedding:

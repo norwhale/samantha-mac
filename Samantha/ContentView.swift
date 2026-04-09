@@ -13,6 +13,11 @@ struct Message: Identifiable {
     let isUser: Bool
 }
 
+enum AppTab {
+    case chat
+    case insights
+}
+
 struct ContentView: View {
     @State private var messages: [Message] = [
         Message(text: "こんにちは！何かお手伝いできることはありますか？", isUser: false),
@@ -20,18 +25,42 @@ struct ContentView: View {
     @State private var inputText = ""
     @State private var isLoading = false
     @State private var audioService = AudioService()
+    @State private var ttsTask: Task<Void, Never>?
+    @State private var currentTab: AppTab = .chat
     @Environment(ProactiveService.self) var proactiveService
 
-    private var isBusy: Bool { isLoading || audioService.isRecording || audioService.isSpeaking }
+    private var isInputDisabled: Bool { isLoading || audioService.isRecording }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
+            // Header with tab switcher
+            HStack(spacing: 8) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(.purple)
-                Text("Samantha")
-                    .font(.headline)
+
+                Button { currentTab = .chat } label: {
+                    Text("Chat")
+                        .font(.caption.weight(currentTab == .chat ? .bold : .regular))
+                        .foregroundStyle(currentTab == .chat ? .purple : .secondary)
+                }
+                .buttonStyle(.plain)
+
+                Button { currentTab = .insights } label: {
+                    HStack(spacing: 3) {
+                        Text("Insights")
+                            .font(.caption.weight(currentTab == .insights ? .bold : .regular))
+                            .foregroundStyle(currentTab == .insights ? .purple : .secondary)
+
+                        // Badge for unread suggestion
+                        if proactiveService.pendingSuggestion != nil {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -39,6 +68,23 @@ struct ContentView: View {
 
             Divider()
 
+            // Tab content
+            switch currentTab {
+            case .chat:
+                chatView
+            case .insights:
+                insightsView
+            }
+        }
+        .task {
+            proactiveService.startMonitoring()
+        }
+    }
+
+    // MARK: - Chat View
+
+    private var chatView: some View {
+        VStack(spacing: 0) {
             // Proactive suggestion banner
             if let suggestion = proactiveService.pendingSuggestion {
                 HStack(spacing: 6) {
@@ -47,8 +93,16 @@ struct ContentView: View {
                         .font(.caption)
                     Text(suggestion)
                         .font(.caption)
-                        .lineLimit(3)
+                        .lineLimit(2)
                     Spacer(minLength: 4)
+                    Button {
+                        currentTab = .insights
+                    } label: {
+                        Text("詳細")
+                            .font(.caption2)
+                            .foregroundStyle(.purple)
+                    }
+                    .buttonStyle(.plain)
                     Button {
                         proactiveService.pendingSuggestion = nil
                     } label: {
@@ -116,18 +170,17 @@ struct ContentView: View {
 
             // Input area
             HStack(spacing: 8) {
-                // Mic button
-                Button(action: toggleRecording) {
-                    Image(systemName: audioService.isRecording ? "stop.circle.fill" : "mic.fill")
+                Button(action: handleAudioButton) {
+                    Image(systemName: audioButtonIconName)
                         .font(.title2)
-                        .foregroundStyle(audioService.isRecording ? .red : .purple)
+                        .foregroundStyle(audioButtonColor)
                 }
                 .buttonStyle(.plain)
-                .disabled(isLoading || audioService.isSpeaking)
+                .disabled(isLoading)
 
                 TextField("メッセージを入力…", text: $inputText)
                     .textFieldStyle(.plain)
-                    .disabled(isBusy)
+                    .disabled(isInputDisabled)
                     .onSubmit { sendMessage() }
 
                 Button(action: sendMessage) {
@@ -136,24 +189,76 @@ struct ContentView: View {
                         .foregroundStyle(.purple)
                 }
                 .buttonStyle(.plain)
-                .disabled(isBusy || inputText.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(isInputDisabled || inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(10)
         }
-        .task {
-            // Start proactive monitoring when view appears
-            proactiveService.startMonitoring()
+    }
+
+    // MARK: - Insights View (Suggestion History)
+
+    private var insightsView: some View {
+        VStack(spacing: 0) {
+            if proactiveService.suggestionHistory.isEmpty {
+                Spacer()
+                VStack(spacing: 8) {
+                    Image(systemName: "lightbulb")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("まだ提案はありません")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Samanthaが5分ごとに状況を分析し、\n提案があればここに表示されます。")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                }
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(proactiveService.suggestionHistory) { suggestion in
+                            SuggestionCard(suggestion: suggestion)
+                        }
+                    }
+                    .padding(12)
+                }
+            }
+        }
+        .onAppear {
+            // Clear the badge when viewing insights
+            proactiveService.pendingSuggestion = nil
         }
     }
 
     // MARK: - Recording
+
+    private var audioButtonIconName: String {
+        if audioService.isSpeaking { return "speaker.slash.fill" }
+        if audioService.isRecording { return "stop.circle.fill" }
+        return "mic.fill"
+    }
+
+    private var audioButtonColor: Color {
+        if audioService.isSpeaking { return .orange }
+        if audioService.isRecording { return .red }
+        return .purple
+    }
+
+    private func handleAudioButton() {
+        if audioService.isSpeaking {
+            cancelSpeech()
+            return
+        }
+        toggleRecording()
+    }
 
     private func toggleRecording() {
         if audioService.isRecording {
             Task {
                 do {
                     let transcribed = try await audioService.stopRecordingAndTranscribe()
-                    guard !transcribed.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                    guard !transcribed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
                     inputText = transcribed
                     sendMessage()
                 } catch {
@@ -161,6 +266,7 @@ struct ContentView: View {
                 }
             }
         } else {
+            cancelSpeech()
             audioService.startRecording()
         }
     }
@@ -181,9 +287,29 @@ struct ContentView: View {
 
     // MARK: - Send
 
+    private func cancelSpeech() {
+        ttsTask?.cancel()
+        ttsTask = nil
+        audioService.stopSpeaking()
+    }
+
+    private func makeRAGContext(from docs: [RAGService.Document]) -> String {
+        docs
+            .map { doc in
+                let snippet = doc.text.count > 3_000
+                    ? "\(String(doc.text.prefix(3_000)))\n..."
+                    : doc.text
+                return "[\(doc.filename)]\n\(snippet)"
+            }
+            .joined(separator: "\n---\n")
+    }
+
     private func sendMessage() {
-        let text = inputText.trimmingCharacters(in: .whitespaces)
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
+
+        // Stop any ongoing TTS before sending new message
+        cancelSpeech()
 
         messages.append(Message(text: text, isUser: true))
         ActivityLogger.logUser(text)
@@ -196,7 +322,6 @@ struct ContentView: View {
 
         Task {
             do {
-                // RAG
                 var ragContext: String? = nil
                 do {
                     let docs = try await withThrowingTaskGroup(of: [RAGService.Document].self) { group in
@@ -205,14 +330,14 @@ struct ContentView: View {
                             try await Task.sleep(for: .seconds(5))
                             throw CancellationError()
                         }
-                        let result = try await group.next()!
+                        guard let result = try await group.next() else {
+                            return [RAGService.Document]()
+                        }
                         group.cancelAll()
                         return result
                     }
                     if !docs.isEmpty {
-                        ragContext = docs
-                            .map { "[\($0.filename)]\n\($0.text)" }
-                            .joined(separator: "\n---\n")
+                        ragContext = makeRAGContext(from: docs)
                         print("[RAG] Context length: \(ragContext?.count ?? 0) chars from \(docs.count) doc(s)")
                     } else {
                         print("[RAG] No relevant documents found")
@@ -224,20 +349,67 @@ struct ContentView: View {
                 let reply = try await ChatService.send(history: history, ragContext: ragContext)
                 messages.append(Message(text: reply, isUser: false))
                 ActivityLogger.logAssistant(reply)
+                isLoading = false
 
-                // TTS
-                do {
-                    try await audioService.speak(reply)
-                } catch {
-                    print("[Audio] TTS failed: \(error)")
+                // TTS: fire-and-forget (does NOT block UI)
+                ttsTask = Task(priority: .userInitiated) {
+                    do {
+                        try await audioService.speak(reply)
+                    } catch is CancellationError {
+                        // User interrupted playback or started a new request.
+                    } catch {
+                        print("[Audio] TTS failed: \(error)")
+                    }
                 }
             } catch {
                 messages.append(Message(text: "エラー: \(error.localizedDescription)", isUser: false))
+                isLoading = false
             }
-            isLoading = false
         }
     }
 }
+
+// MARK: - Suggestion Card
+
+struct SuggestionCard: View {
+    let suggestion: Suggestion
+
+    private var timeString: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "HH:mm"
+        return fmt.string(from: suggestion.timestamp)
+    }
+
+    private var dateString: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "MM/dd"
+        return fmt.string(from: suggestion.timestamp)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundStyle(.yellow)
+                    .font(.caption2)
+                Text("\(dateString) \(timeString)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            Text(suggestion.text)
+                .font(.caption)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .background(Color.yellow.opacity(0.06))
+        .cornerRadius(10)
+    }
+}
+
+// MARK: - Chat Bubble
 
 struct ChatBubble: View {
     let message: Message
