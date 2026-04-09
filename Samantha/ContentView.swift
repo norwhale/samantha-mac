@@ -39,7 +39,7 @@ struct ContentView: View {
     @Environment(ProactiveService.self) var proactiveService
 
     /// Global timeout for the entire send → response cycle (seconds).
-    private let globalTimeout: UInt64 = 30
+    private let globalTimeout: UInt64 = 60
 
     private var isInputDisabled: Bool { isLoading || audioService.isRecording }
 

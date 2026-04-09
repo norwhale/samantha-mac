@@ -357,6 +357,13 @@ struct CommandCenterView: View {
 
         let captured = (history: history, text: text)
 
+        // Timeout: 60s for multi-agent, 30s for simple queries
+        let lower = text.lowercased()
+        let isComplex = lower.contains("分析") || lower.contains("analyze") || lower.contains("計画")
+            || lower.contains("plan") || lower.contains("比較") || lower.contains("調査")
+            || lower.contains("多角") || lower.contains("観点")
+        let timeout: UInt64 = isComplex ? 90 : 60
+
         Task.detached(priority: .userInitiated) {
             do {
                 let reply: String = try await withThrowingTaskGroup(of: String.self) { group in
@@ -365,7 +372,7 @@ struct CommandCenterView: View {
                         return try await ChatService.send(history: captured.history, ragContext: rag)
                     }
                     group.addTask {
-                        try await Task.sleep(nanoseconds: 30_000_000_000)
+                        try await Task.sleep(nanoseconds: timeout * 1_000_000_000)
                         throw TimeoutError()
                     }
                     guard let result = try await group.next() else { throw TimeoutError() }
@@ -388,7 +395,7 @@ struct CommandCenterView: View {
                 }
             } catch is TimeoutError {
                 await MainActor.run {
-                    self.messages.append(Message(text: "タイムアウト（30秒）。再試行してください。", isUser: false, isError: true))
+                    self.messages.append(Message(text: "タイムアウト（\(timeout)秒）。複雑なリクエストの場合は、より具体的に指示してみてください。", isUser: false, isError: true))
                     self.isLoading = false
                     self.resetAgents()
                 }

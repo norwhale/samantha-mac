@@ -163,7 +163,7 @@ nonisolated struct MultiAgentService {
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 20
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.setValue(trimmedKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")

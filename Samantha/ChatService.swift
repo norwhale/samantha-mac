@@ -11,9 +11,9 @@ nonisolated struct ChatService {
     private static let apiKey: String = Bundle.main.infoDictionary?["ANTHROPIC_API_KEY"] as? String ?? ""
     private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let model = "claude-haiku-4-5-20251001"
-    private static let requestTimeout: TimeInterval = 30
+    private static let requestTimeout: TimeInterval = 45
     private static let shellTimeout: TimeInterval = 10
-    private static let maxToolRounds = 5
+    private static let maxToolRounds = 8
 
     private static let systemPrompt = """
     You are Samantha — a dedicated, intelligent, and empathetic personal AI assistant \
