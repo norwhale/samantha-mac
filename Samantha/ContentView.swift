@@ -374,12 +374,48 @@ struct ContentView: View {
                 let reply: String = try await withThrowingTaskGroup(of: String.self) { group in
                     // Main work
                     group.addTask {
-                        // RAG (5s sub-timeout)
-                        let ragContext = await Self.fetchRAGContext(query: capturedText)
+                        // Check if Gemma 4 (Ollama) is available as orchestrator
+                        let gemmaAvailable = await OllamaService.isAvailable()
 
-                        // Claude API + Tool Use
-                        AppLogger.shared.log("[API] Calling ChatService.send()")
-                        return try await ChatService.send(history: capturedHistory, ragContext: ragContext)
+                        if gemmaAvailable {
+                            AppLogger.shared.log("[Orchestrator] Gemma 4 31B is online — using as commander")
+
+                            // Gemma decides the approach
+                            let plan = try await OllamaService.orchestrate(
+                                userMessage: capturedText,
+                                availableTools: ["claude_chat", "gmail", "calendar", "shell", "multi_agent", "rag"]
+                            )
+                            AppLogger.shared.log("[Orchestrator] Plan: \(plan.approach) — \(plan.reasoning)")
+
+                            switch plan.approach {
+                            case .direct:
+                                // Gemma answers directly
+                                return try await OllamaService.chat(
+                                    messages: capturedHistory,
+                                    system: "あなたはSamantha。Yuichiの専属AIアシスタント。日本語で簡潔に回答。"
+                                )
+
+                            case .multiAgent:
+                                // Gemma delegates to multi-agent analysis
+                                let perspectives = plan.agents.isEmpty
+                                    ? ["技術の専門家", "戦略アナリスト", "実務コンサルタント"]
+                                    : plan.agents
+                                return try await MultiAgentService.analyze(
+                                    question: capturedText,
+                                    perspectives: perspectives
+                                )
+
+                            case .single:
+                                // Route to Claude with tools (Gmail, Calendar, Shell, etc.)
+                                let ragContext = await Self.fetchRAGContext(query: capturedText)
+                                return try await ChatService.send(history: capturedHistory, ragContext: ragContext)
+                            }
+                        } else {
+                            // Fallback: Claude handles everything (original flow)
+                            AppLogger.shared.log("[Orchestrator] Gemma unavailable — Claude direct mode")
+                            let ragContext = await Self.fetchRAGContext(query: capturedText)
+                            return try await ChatService.send(history: capturedHistory, ragContext: ragContext)
+                        }
                     }
 
                     // Hard timeout
