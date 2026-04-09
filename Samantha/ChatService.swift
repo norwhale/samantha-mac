@@ -60,6 +60,15 @@ nonisolated struct ChatService {
     - Use these when the user asks about schedule, appointments, meetings, or wants to create events.
     - For creating events, ask for date/time details if not provided. Use ISO 8601 format.
     - If Google services are not authenticated, tell the user to type "Gmail認証" to set up.
+
+    ## Multi-agent tools
+    - `multi_agent_analyze`: Use when a question benefits from multiple expert perspectives.
+      Provide 2-4 specialist roles (e.g. ["医学の専門家", "経済アナリスト", "文化人類学者"]).
+      Each specialist analyzes independently in parallel, then results are synthesized.
+      Use for: complex questions, comparative analysis, decision-making.
+    - `multi_agent_plan_execute`: Use when a task requires step-by-step planning and execution.
+      A planner creates steps, then each step is executed sequentially.
+      Use for: research tasks, multi-step workflows, project planning.
     """
 
     // MARK: - Tool definition
@@ -197,6 +206,43 @@ nonisolated struct ChatService {
                 "required": ["summary", "start", "end"],
             ] as [String: Any],
         ] as [String: Any],
+        [
+            "name": "multi_agent_analyze",
+            "description": "複数の専門家エージェントが並列に分析し、結果を統合します。複雑な質問や多角的な分析が必要な場合に使用。",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "question": [
+                        "type": "string",
+                        "description": "分析対象の質問",
+                    ] as [String: Any],
+                    "perspectives": [
+                        "type": "array",
+                        "items": ["type": "string"] as [String: Any],
+                        "description": "専門家の役割リスト（2〜4個、例: ['医学の専門家', '経済アナリスト', '文化人類学者']）",
+                    ] as [String: Any],
+                ] as [String: Any],
+                "required": ["question", "perspectives"],
+            ] as [String: Any],
+        ] as [String: Any],
+        [
+            "name": "multi_agent_plan_execute",
+            "description": "複雑なタスクを計画→実行します。まずステップを計画し、各ステップを順番に実行して結果を統合します。",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "task": [
+                        "type": "string",
+                        "description": "実行するタスクの説明",
+                    ] as [String: Any],
+                    "context": [
+                        "type": "string",
+                        "description": "追加の背景情報（任意）",
+                    ] as [String: Any],
+                ] as [String: Any],
+                "required": ["task"],
+            ] as [String: Any],
+        ] as [String: Any],
     ]
 
     // MARK: - Public API
@@ -324,6 +370,26 @@ nonisolated struct ChatService {
                         result = "Calendar error: \(error.localizedDescription)"
                     }
                     ActivityLogger.logTool("calendar_create(\(summary))", result: result)
+                } else if call.name == "multi_agent_analyze",
+                          let question = call.input["question"] as? String,
+                          let perspectives = call.input["perspectives"] as? [String]
+                {
+                    do {
+                        result = try await MultiAgentService.analyze(question: question, perspectives: perspectives)
+                    } catch {
+                        result = "Multi-agent error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("multi_agent_analyze(\(perspectives.count) agents)", result: result)
+                } else if call.name == "multi_agent_plan_execute",
+                          let task = call.input["task"] as? String
+                {
+                    let context = call.input["context"] as? String
+                    do {
+                        result = try await MultiAgentService.planAndExecute(task: task, context: context)
+                    } catch {
+                        result = "Plan-execute error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("multi_agent_plan(\(task.prefix(30)))", result: result)
                 } else {
                     result = "Unknown tool: \(call.name)"
                 }
