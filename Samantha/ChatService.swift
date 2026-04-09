@@ -54,6 +54,9 @@ nonisolated struct ChatService {
         - Brightness, volume, etc. can also be controlled via shell.
     - Always summarise command output in a user-friendly way — do not dump raw output.
     - Never run destructive commands (rm -rf /, mkfs, etc.) without explicit user confirmation.
+    - You have Gmail tools: `gmail_list_unread`, `gmail_read_message`, `gmail_search`.
+    - Use these when the user asks about emails, inbox, unread messages, etc.
+    - If Gmail is not authenticated, tell the user to type "Gmail認証" to set up.
     """
 
     // MARK: - Tool definition
@@ -75,6 +78,51 @@ nonisolated struct ChatService {
                     ] as [String: Any],
                 ] as [String: Any],
                 "required": ["command"],
+            ] as [String: Any],
+        ] as [String: Any],
+        [
+            "name": "gmail_list_unread",
+            "description": "Gmailの未読メール一覧を取得します（件名、差出人、日時）。",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "max_results": [
+                        "type": "integer",
+                        "description": "取得する最大件数（デフォルト5）",
+                    ] as [String: Any],
+                ] as [String: Any],
+            ] as [String: Any],
+        ] as [String: Any],
+        [
+            "name": "gmail_read_message",
+            "description": "指定されたIDのGmailメールの本文を取得します。",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "message_id": [
+                        "type": "string",
+                        "description": "メールのID（gmail_list_unreadやgmail_searchで取得）",
+                    ] as [String: Any],
+                ] as [String: Any],
+                "required": ["message_id"],
+            ] as [String: Any],
+        ] as [String: Any],
+        [
+            "name": "gmail_search",
+            "description": "Gmail検索クエリでメールを検索します（例: from:user@example.com, subject:meeting, newer_than:1d）。",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "query": [
+                        "type": "string",
+                        "description": "Gmail検索クエリ（例: 'from:amazon.co.jp', 'subject:invoice', 'newer_than:3d'）",
+                    ] as [String: Any],
+                    "max_results": [
+                        "type": "integer",
+                        "description": "取得する最大件数（デフォルト5）",
+                    ] as [String: Any],
+                ] as [String: Any],
+                "required": ["query"],
             ] as [String: Any],
         ] as [String: Any],
     ]
@@ -136,6 +184,33 @@ nonisolated struct ChatService {
                 {
                     result = await executeShellCommand(command)
                     ActivityLogger.logTool(command, result: result)
+                } else if call.name == "gmail_list_unread" {
+                    let max = call.input["max_results"] as? Int ?? 5
+                    do {
+                        result = try await GmailService.listUnread(maxResults: max)
+                    } catch {
+                        result = "Gmail error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("gmail_list_unread", result: result)
+                } else if call.name == "gmail_read_message",
+                          let id = call.input["message_id"] as? String
+                {
+                    do {
+                        result = try await GmailService.readMessage(id: id)
+                    } catch {
+                        result = "Gmail error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("gmail_read_message(\(id))", result: result)
+                } else if call.name == "gmail_search",
+                          let query = call.input["query"] as? String
+                {
+                    let max = call.input["max_results"] as? Int ?? 5
+                    do {
+                        result = try await GmailService.searchMessages(query: query, maxResults: max)
+                    } catch {
+                        result = "Gmail error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("gmail_search(\(query))", result: result)
                 } else {
                     result = "Unknown tool: \(call.name)"
                 }

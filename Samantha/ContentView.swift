@@ -315,6 +315,29 @@ struct ContentView: View {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
 
+        // Handle "Gmail認証" command
+        if text.contains("Gmail認証") || text.lowercased().contains("gmail auth") {
+            inputText = ""
+            messages.append(Message(text: text, isUser: true))
+            messages.append(Message(text: "ブラウザでGoogleログイン画面を開きます…", isUser: false))
+            isLoading = true
+            Task.detached {
+                do {
+                    let result = try await GmailService.authenticate()
+                    await MainActor.run {
+                        self.messages.append(Message(text: result, isUser: false))
+                        self.isLoading = false
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.messages.append(Message(text: "Gmail認証エラー: \(error.localizedDescription)", isUser: false, isError: true))
+                        self.isLoading = false
+                    }
+                }
+            }
+            return
+        }
+
         cancelSpeech()
         lastFailedText = nil
 
