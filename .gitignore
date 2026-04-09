@@ -1,0 +1,32 @@
+# API keys — NEVER commit
+Config.xcconfig
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# CocoaPods (if used)
+Pods/
+
+# macOS
+.DS_Store
+*.swp
+*~.nib
+
+# Temporary files
+*.log
