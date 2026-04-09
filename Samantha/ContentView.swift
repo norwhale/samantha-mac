@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var inputText = ""
     @State private var isLoading = false
     @State private var audioService = AudioService()
+    @Environment(ProactiveService.self) var proactiveService
 
     private var isBusy: Bool { isLoading || audioService.isRecording || audioService.isSpeaking }
 
@@ -37,6 +38,32 @@ struct ContentView: View {
             .padding(.vertical, 8)
 
             Divider()
+
+            // Proactive suggestion banner
+            if let suggestion = proactiveService.pendingSuggestion {
+                HStack(spacing: 6) {
+                    Image(systemName: "lightbulb.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.caption)
+                    Text(suggestion)
+                        .font(.caption)
+                        .lineLimit(3)
+                    Spacer(minLength: 4)
+                    Button {
+                        proactiveService.pendingSuggestion = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(Color.yellow.opacity(0.1))
+                .cornerRadius(8)
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
+            }
 
             // Chat history
             ScrollViewReader { proxy in
@@ -113,13 +140,16 @@ struct ContentView: View {
             }
             .padding(10)
         }
+        .task {
+            // Start proactive monitoring when view appears
+            proactiveService.startMonitoring()
+        }
     }
 
     // MARK: - Recording
 
     private func toggleRecording() {
         if audioService.isRecording {
-            // Stop & transcribe
             Task {
                 do {
                     let transcribed = try await audioService.stopRecordingAndTranscribe()
@@ -156,17 +186,17 @@ struct ContentView: View {
         guard !text.isEmpty, !isLoading else { return }
 
         messages.append(Message(text: text, isUser: true))
+        ActivityLogger.logUser(text)
         inputText = ""
         isLoading = true
 
-        // Build conversation history for the API (skip the initial greeting)
         let history: [(role: String, content: String)] = messages.dropFirst().map { msg in
             (role: msg.isUser ? "user" : "assistant", content: msg.text)
         }
 
         Task {
             do {
-                // RAG: search blog articles for relevant context (5s timeout)
+                // RAG
                 var ragContext: String? = nil
                 do {
                     let docs = try await withThrowingTaskGroup(of: [RAGService.Document].self) { group in
@@ -193,8 +223,9 @@ struct ContentView: View {
 
                 let reply = try await ChatService.send(history: history, ragContext: ragContext)
                 messages.append(Message(text: reply, isUser: false))
+                ActivityLogger.logAssistant(reply)
 
-                // TTS: read the reply aloud
+                // TTS
                 do {
                     try await audioService.speak(reply)
                 } catch {
@@ -230,5 +261,6 @@ struct ChatBubble: View {
 
 #Preview {
     ContentView()
+        .environment(ProactiveService())
         .frame(width: 300, height: 400)
 }
