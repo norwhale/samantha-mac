@@ -56,7 +56,10 @@ nonisolated struct ChatService {
     - Never run destructive commands (rm -rf /, mkfs, etc.) without explicit user confirmation.
     - You have Gmail tools: `gmail_list_unread`, `gmail_read_message`, `gmail_search`.
     - Use these when the user asks about emails, inbox, unread messages, etc.
-    - If Gmail is not authenticated, tell the user to type "Gmail認証" to set up.
+    - You have Calendar tools: `calendar_today`, `calendar_list_upcoming`, `calendar_search`, `calendar_create_event`.
+    - Use these when the user asks about schedule, appointments, meetings, or wants to create events.
+    - For creating events, ask for date/time details if not provided. Use ISO 8601 format.
+    - If Google services are not authenticated, tell the user to type "Gmail認証" to set up.
     """
 
     // MARK: - Tool definition
@@ -123,6 +126,75 @@ nonisolated struct ChatService {
                     ] as [String: Any],
                 ] as [String: Any],
                 "required": ["query"],
+            ] as [String: Any],
+        ] as [String: Any],
+        [
+            "name": "calendar_list_upcoming",
+            "description": "Googleカレンダーの今後の予定一覧を取得します。",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "days": [
+                        "type": "integer",
+                        "description": "何日先まで取得するか（デフォルト7）",
+                    ] as [String: Any],
+                    "max_results": [
+                        "type": "integer",
+                        "description": "取得する最大件数（デフォルト10）",
+                    ] as [String: Any],
+                ] as [String: Any],
+            ] as [String: Any],
+        ] as [String: Any],
+        [
+            "name": "calendar_today",
+            "description": "今日のGoogleカレンダーの予定を取得します。",
+            "input_schema": [
+                "type": "object",
+                "properties": [:] as [String: Any],
+            ] as [String: Any],
+        ] as [String: Any],
+        [
+            "name": "calendar_search",
+            "description": "Googleカレンダーの予定をキーワードで検索します。",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "query": [
+                        "type": "string",
+                        "description": "検索キーワード（例: 'meeting', '試験', 'dentist'）",
+                    ] as [String: Any],
+                ] as [String: Any],
+                "required": ["query"],
+            ] as [String: Any],
+        ] as [String: Any],
+        [
+            "name": "calendar_create_event",
+            "description": "Googleカレンダーに新しい予定を作成します。日時はISO 8601形式（例: 2026-04-10T14:00:00）。",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "summary": [
+                        "type": "string",
+                        "description": "予定のタイトル",
+                    ] as [String: Any],
+                    "start": [
+                        "type": "string",
+                        "description": "開始日時（ISO 8601形式、例: 2026-04-10T14:00:00）",
+                    ] as [String: Any],
+                    "end": [
+                        "type": "string",
+                        "description": "終了日時（ISO 8601形式、例: 2026-04-10T15:00:00）",
+                    ] as [String: Any],
+                    "description": [
+                        "type": "string",
+                        "description": "メモ（任意）",
+                    ] as [String: Any],
+                    "location": [
+                        "type": "string",
+                        "description": "場所（任意）",
+                    ] as [String: Any],
+                ] as [String: Any],
+                "required": ["summary", "start", "end"],
             ] as [String: Any],
         ] as [String: Any],
     ]
@@ -211,6 +283,47 @@ nonisolated struct ChatService {
                         result = "Gmail error: \(error.localizedDescription)"
                     }
                     ActivityLogger.logTool("gmail_search(\(query))", result: result)
+                } else if call.name == "calendar_list_upcoming" {
+                    let days = call.input["days"] as? Int ?? 7
+                    let max = call.input["max_results"] as? Int ?? 10
+                    do {
+                        result = try await CalendarService.listUpcoming(maxResults: max, days: days)
+                    } catch {
+                        result = "Calendar error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("calendar_list_upcoming", result: result)
+                } else if call.name == "calendar_today" {
+                    do {
+                        result = try await CalendarService.listToday()
+                    } catch {
+                        result = "Calendar error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("calendar_today", result: result)
+                } else if call.name == "calendar_search",
+                          let query = call.input["query"] as? String
+                {
+                    do {
+                        result = try await CalendarService.searchEvents(query: query)
+                    } catch {
+                        result = "Calendar error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("calendar_search(\(query))", result: result)
+                } else if call.name == "calendar_create_event",
+                          let summary = call.input["summary"] as? String,
+                          let start = call.input["start"] as? String,
+                          let end = call.input["end"] as? String
+                {
+                    let desc = call.input["description"] as? String
+                    let loc = call.input["location"] as? String
+                    do {
+                        result = try await CalendarService.createEvent(
+                            summary: summary, startDateTime: start, endDateTime: end,
+                            description: desc, location: loc
+                        )
+                    } catch {
+                        result = "Calendar error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("calendar_create(\(summary))", result: result)
                 } else {
                     result = "Unknown tool: \(call.name)"
                 }

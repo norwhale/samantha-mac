@@ -14,7 +14,7 @@ nonisolated struct GmailService {
     private static let clientID: String = Bundle.main.infoDictionary?["GOOGLE_CLIENT_ID"] as? String ?? ""
     private static let clientSecret: String = Bundle.main.infoDictionary?["GOOGLE_CLIENT_SECRET"] as? String ?? ""
     private static let redirectURI = "http://localhost:8089/callback"
-    private static let scope = "https://www.googleapis.com/auth/gmail.readonly"
+    private static let scope = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events"
     private static let tokenFile = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".samantha/gmail_tokens.json")
 
@@ -162,7 +162,8 @@ nonisolated struct GmailService {
 
     // MARK: - Token management
 
-    private static func getValidAccessToken() async throws -> String {
+    /// Shared: get a valid access token (used by CalendarService too).
+    static func getValidAccessToken() async throws -> String {
         guard var tokens = loadTokens() else {
             throw GmailError.notAuthenticated
         }
