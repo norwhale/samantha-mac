@@ -66,6 +66,11 @@ ActivityLogger.swift       → JSON activity log + summarization
 
 ## Setup
 
+### 1. Get your API keys
+- **Anthropic Claude API key**: https://console.anthropic.com → API Keys → Create Key
+- **OpenAI API key** (for Whisper STT + TTS): https://platform.openai.com/api-keys
+
+### 2. Clone & configure
 1. Clone the repo
 2. Copy `Config.xcconfig.sample` to `Config.xcconfig`
 3. Fill in your API keys:
@@ -73,9 +78,31 @@ ActivityLogger.swift       → JSON activity log + summarization
    ANTHROPIC_API_KEY = sk-ant-...
    OPENAI_API_KEY = sk-proj-...
    ```
+   ⚠️ `Config.xcconfig` is already in `.gitignore` — never commit it.
+
+### 3. Open in Xcode
 4. Open `Samantha.xcodeproj` in Xcode
 5. Build & Run (Cmd+R)
 6. Look for the ✨ icon in your menu bar
+
+### ⚠️ Important: App Sandbox is disabled
+
+Samantha runs **outside the macOS App Sandbox** by design. This is required because the app:
+- Executes arbitrary shell commands via Claude's tool use (`execute_shell_command`)
+- Controls other apps via AppleScript (`osascript`)
+- Reads system state (running apps, battery, uptime) for proactive monitoring
+
+The `Samantha.entitlements` file is intentionally empty (`<dict/>`) and **App Sandbox** under *Signing & Capabilities* is turned OFF. If you re-enable the sandbox, shell execution and AppleScript control will stop working.
+
+> Because the sandbox is off, Samantha can do anything *you* can do in Terminal. Only run it with API keys and a setup you trust.
+
+### macOS Permissions
+
+On first launch, macOS will prompt for:
+- **Microphone access** — required for voice chat (Whisper STT). Grant via *System Settings → Privacy & Security → Microphone*.
+- **Notifications** — required for proactive suggestions. Grant via *System Settings → Notifications → Samantha*.
+
+Some shell/AppleScript actions may also trigger **Automation** prompts (e.g. controlling Spotify or Finder). Allow them when asked.
 
 ## API Cost
 
