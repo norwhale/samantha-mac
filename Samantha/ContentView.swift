@@ -418,6 +418,29 @@ struct ContentView: View {
             return
         }
 
+        // Handle "Spotify認証" command
+        if text.contains("Spotify認証") || text.lowercased().contains("spotify auth") {
+            inputText = ""
+            messages.append(Message(text: text, isUser: true))
+            messages.append(Message(text: "ブラウザでSpotifyログイン画面を開きます…", isUser: false))
+            isLoading = true
+            Task.detached {
+                do {
+                    let result = try await SpotifyService.authenticate()
+                    await MainActor.run {
+                        self.messages.append(Message(text: result, isUser: false))
+                        self.isLoading = false
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.messages.append(Message(text: "Spotify認証エラー: \(error.localizedDescription)", isUser: false, isError: true))
+                        self.isLoading = false
+                    }
+                }
+            }
+            return
+        }
+
         cancelSpeech()
         lastFailedText = nil
 

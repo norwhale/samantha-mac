@@ -59,12 +59,15 @@ nonisolated struct ChatService {
         - Example (classical focus): osascript -e 'tell application "Spotify" to play track "spotify:playlist:37i9dQZF1DX8NTLI2TtZa6"'
         - Example (ambient chill): osascript -e 'tell application "Spotify" to play track "spotify:playlist:37i9dQZF1DX3Ogo9pFvBkY"'
         - For other moods, use `open "https://open.spotify.com/search/<query>"` then let the user click
-      Mood → Playlist mapping (use these when user asks for a vibe):
-        - 落ち着く / relaxing / chill → lo-fi beats (spotify:playlist:37i9dQZF1DWWQRwui0ExPn)
-        - 集中 / focus / study → Deep Focus (spotify:playlist:37i9dQZF1DWZeKCadgRdKQ)
-        - ambient → Ambient Chill (spotify:playlist:37i9dQZF1DX3Ogo9pFvBkY)
-        - classical → Classical Focus (spotify:playlist:37i9dQZF1DX8NTLI2TtZa6)
-      IMPORTANT: When the user asks for a MOOD (落ち着く曲、chill、relaxing, etc.), do NOT just `play` — play a specific playlist.
+      🎵 IMPORTANT: For mood-based music requests, use the `spotify_play_mood` tool instead of AppleScript.
+      This tool uses Spotify Web API to autonomously search and play the best matching playlist.
+      - User says "落ち着く曲" → spotify_play_mood with query "chill lo-fi relaxing ambient"
+      - User says "集中したい" → spotify_play_mood with query "deep focus study instrumental"
+      - User says "元気出したい" → spotify_play_mood with query "energetic motivation morning boost"
+      - User says "雨の日の気分" → spotify_play_mood with query "rainy day jazz melancholic"
+      - User says "運動中" → spotify_play_mood with query "workout pump energetic beats"
+      Choose the search query freely based on mood — be creative and specific.
+      Only use the basic AppleScript commands below for pause/play/next without mood context.
 
       Other commands:
         - Open app:      open -a "AppName"
@@ -265,6 +268,28 @@ nonisolated struct ChatService {
                 "required": ["task"],
             ] as [String: Any],
         ] as [String: Any],
+        [
+            "name": "spotify_play_mood",
+            "description": "Spotify Web APIでムード・ジャンル・シチュエーションに合うプレイリストを検索して自動再生します。ユーザーが「落ち着く曲」「集中できる曲」「雨の日の曲」「元気が出る曲」などの抽象的なリクエストをした時に使用。この関数は自律的にあなた（Claude）が適切な検索クエリを英語で組み立てます。",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "search_query": [
+                        "type": "string",
+                        "description": "Spotifyプレイリスト検索クエリ（英語推奨）。例: 'chill lo-fi study beats', 'rainy day jazz ambient', 'energetic workout motivation', 'calm piano focus', 'melancholic indie evening'",
+                    ] as [String: Any],
+                ] as [String: Any],
+                "required": ["search_query"],
+            ] as [String: Any],
+        ] as [String: Any],
+        [
+            "name": "spotify_currently_playing",
+            "description": "現在Spotifyで再生中の曲を取得します。",
+            "input_schema": [
+                "type": "object",
+                "properties": [:] as [String: Any],
+            ] as [String: Any],
+        ] as [String: Any],
     ]
 
     // MARK: - Public API
@@ -412,6 +437,22 @@ nonisolated struct ChatService {
                         result = "Plan-execute error: \(error.localizedDescription)"
                     }
                     ActivityLogger.logTool("multi_agent_plan(\(task.prefix(30)))", result: result)
+                } else if call.name == "spotify_play_mood",
+                          let query = call.input["search_query"] as? String
+                {
+                    do {
+                        result = try await SpotifyService.playMood(query)
+                    } catch {
+                        result = "Spotify error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("spotify_play_mood(\(query))", result: result)
+                } else if call.name == "spotify_currently_playing" {
+                    do {
+                        result = try await SpotifyService.currentlyPlaying()
+                    } catch {
+                        result = "Spotify error: \(error.localizedDescription)"
+                    }
+                    ActivityLogger.logTool("spotify_currently_playing", result: result)
                 } else {
                     result = "Unknown tool: \(call.name)"
                 }
