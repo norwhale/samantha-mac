@@ -12,11 +12,13 @@ import UserNotifications
 struct SamanthaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var proactiveService = ProactiveService()
+    @State private var cognitiveLoadService = CognitiveLoadService()
 
     var body: some Scene {
         MenuBarExtra("Samantha", systemImage: "sparkles") {
             ContentView()
                 .environment(proactiveService)
+                .environment(cognitiveLoadService)
                 .frame(width: 420, height: 560)
         }
         .menuBarExtraStyle(.window)

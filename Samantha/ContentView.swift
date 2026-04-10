@@ -37,6 +37,7 @@ struct ContentView: View {
     @State private var currentTab: AppTab = .chat
     @State private var lastFailedText: String?
     @Environment(ProactiveService.self) var proactiveService
+    @Environment(CognitiveLoadService.self) var cognitiveLoadService
 
     /// Global timeout for the entire send → response cycle (seconds).
     private let globalTimeout: UInt64 = 60
@@ -85,7 +86,10 @@ struct ContentView: View {
 
                     // Command Center button
                     Button {
-                        WindowManager.shared.openCommandCenter(proactiveService: proactiveService)
+                        WindowManager.shared.openCommandCenter(
+                            proactiveService: proactiveService,
+                            cognitiveLoadService: cognitiveLoadService
+                        )
                     } label: {
                         Image(systemName: "rectangle.expand.vertical")
                             .font(.system(size: fs(14), weight: .semibold))
@@ -108,7 +112,10 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .task { proactiveService.startMonitoring() }
+        .task {
+            proactiveService.startMonitoring()
+            cognitiveLoadService.start()
+        }
     }
 
     private func tabButton(_ title: String, tab: AppTab, badge: Bool = false) -> some View {
@@ -641,5 +648,6 @@ struct ChatBubble: View {
 #Preview {
     ContentView()
         .environment(ProactiveService())
-        .frame(width: 380, height: 500)
+        .environment(CognitiveLoadService())
+        .frame(width: 420, height: 560)
 }

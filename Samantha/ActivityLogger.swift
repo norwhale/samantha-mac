@@ -141,4 +141,11 @@ nonisolated struct ActivityLogger {
     static func cleanup(keepDays: Int = 7) async {
         await store.cleanup(keepDays: keepDays)
     }
+
+    /// Count entries in the last N minutes (for cognitive load signal).
+    static func recentEntriesCount(minutes: Int) async -> Int {
+        let cutoff = Date().addingTimeInterval(-Double(minutes) * 60)
+        let entries = await store.recentEntries(hours: 1)
+        return entries.filter { $0.timestamp > cutoff }.count
+    }
 }

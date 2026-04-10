@@ -5,6 +5,7 @@
 //  Created by 鯨井優一 on 2026/04/10.
 //
 
+import Charts
 import SwiftUI
 
 // MARK: - Command Center (Full Window)
@@ -20,6 +21,7 @@ struct CommandCenterView: View {
     @State var agentStates: [AgentState] = AgentState.defaults
     @State var systemContext = SystemContext()
     @Environment(ProactiveService.self) var proactiveService
+    @Environment(CognitiveLoadService.self) var cognitiveLoadService
 
     /// Font scale for high-DPI displays (5K2K etc.)
     private let fontScale: CGFloat = 1.5
@@ -70,7 +72,10 @@ struct CommandCenterView: View {
         }
         .preferredColorScheme(.dark)
         .task { await refreshSystemContext() }
-        .task { proactiveService.startMonitoring() }
+        .task {
+            proactiveService.startMonitoring()
+            cognitiveLoadService.start()
+        }
     }
 
     /// Semi-transparent panel background — shows icon behind
@@ -123,6 +128,11 @@ struct CommandCenterView: View {
 
                     Divider().overlay(Color.purple.opacity(0.2))
 
+                    // Cognitive Load Monitor
+                    cognitiveLoadSection
+
+                    Divider().overlay(Color.purple.opacity(0.2))
+
                     // Proactive suggestion
                     if let suggestion = proactiveService.pendingSuggestion {
                         VStack(alignment: .leading, spacing: 8) {
@@ -156,6 +166,104 @@ struct CommandCenterView: View {
     private var batteryColor: Color {
         if systemContext.battery.contains("1") && !systemContext.battery.contains("10") { return .red }
         return .green
+    }
+
+    // MARK: - Cognitive Load Section
+
+    private var cognitiveLoadSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: fs(12)))
+                    .foregroundStyle(loadColor(cognitiveLoadService.currentScore))
+                Text("COGNITIVE LOAD")
+                    .font(.system(size: fs(11), weight: .bold, design: .monospaced))
+                    .foregroundStyle(.gray)
+                Spacer()
+                Text(String(format: "%.1f/10", cognitiveLoadService.currentScore))
+                    .font(.system(size: fs(13), weight: .bold, design: .monospaced))
+                    .foregroundStyle(loadColor(cognitiveLoadService.currentScore))
+            }
+
+            // Load level label
+            Text(loadLabel(cognitiveLoadService.currentScore))
+                .font(.system(size: fs(10), design: .monospaced))
+                .foregroundStyle(loadColor(cognitiveLoadService.currentScore).opacity(0.9))
+
+            // Chart
+            if cognitiveLoadService.history.isEmpty {
+                Text("Collecting data…")
+                    .font(.system(size: fs(10), design: .monospaced))
+                    .foregroundStyle(.gray.opacity(0.5))
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            } else {
+                Chart(cognitiveLoadService.history) { sample in
+                    LineMark(
+                        x: .value("Time", sample.timestamp),
+                        y: .value("Load", sample.score)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.green, .yellow, .orange, .red],
+                            startPoint: .bottom,
+                            endPoint: .top
+                        )
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+
+                    AreaMark(
+                        x: .value("Time", sample.timestamp),
+                        y: .value("Load", sample.score)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                loadColor(cognitiveLoadService.currentScore).opacity(0.3),
+                                .clear,
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .interpolationMethod(.catmullRom)
+                }
+                .chartYScale(domain: 0...10)
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 3)) { _ in
+                        AxisValueLabel(format: .dateTime.hour().minute(), anchor: .top)
+                            .foregroundStyle(.gray.opacity(0.5))
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(values: [0, 5, 10]) { _ in
+                        AxisValueLabel()
+                            .foregroundStyle(.gray.opacity(0.5))
+                        AxisGridLine()
+                            .foregroundStyle(.white.opacity(0.08))
+                    }
+                }
+                .frame(height: 90)
+            }
+        }
+    }
+
+    private func loadColor(_ score: Double) -> Color {
+        switch score {
+        case 0..<4:   return .green
+        case 4..<7:   return .yellow
+        case 7..<9:   return .orange
+        default:      return .red
+        }
+    }
+
+    private func loadLabel(_ score: Double) -> String {
+        switch score {
+        case 0..<4:   return "NORMAL — 集中できる状態"
+        case 4..<7:   return "MODERATE — やや負荷あり"
+        case 7..<9:   return "HIGH — 休憩推奨"
+        default:      return "CRITICAL — 即座に休憩を"
+        }
     }
 
     private func contextRow(icon: String, label: String, value: String, color: Color) -> some View {

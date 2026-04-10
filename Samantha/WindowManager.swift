@@ -14,7 +14,7 @@ final class WindowManager {
     static let shared = WindowManager()
     private var window: NSWindow?
 
-    func openCommandCenter(proactiveService: ProactiveService) {
+    func openCommandCenter(proactiveService: ProactiveService, cognitiveLoadService: CognitiveLoadService) {
         // If already open, bring to front
         if let existing = window, existing.isVisible {
             existing.makeKeyAndOrderFront(nil)
@@ -24,6 +24,7 @@ final class WindowManager {
 
         let view = CommandCenterView()
             .environment(proactiveService)
+            .environment(cognitiveLoadService)
 
         let hostingView = NSHostingView(rootView: view)
 
