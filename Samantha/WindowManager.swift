@@ -28,8 +28,8 @@ final class WindowManager {
         let hostingView = NSHostingView(rootView: view)
 
         let w = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 650),
-            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 1500, height: 950),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -40,7 +40,7 @@ final class WindowManager {
         w.backgroundColor = .black
         w.titlebarAppearsTransparent = true
         w.titleVisibility = .hidden
-        w.minSize = NSSize(width: 800, height: 500)
+        w.minSize = NSSize(width: 1200, height: 750)
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 

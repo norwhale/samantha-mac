@@ -17,7 +17,7 @@ struct SamanthaApp: App {
         MenuBarExtra("Samantha", systemImage: "sparkles") {
             ContentView()
                 .environment(proactiveService)
-                .frame(width: 300, height: 400)
+                .frame(width: 420, height: 560)
         }
         .menuBarExtraStyle(.window)
     }

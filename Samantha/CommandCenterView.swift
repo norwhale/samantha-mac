@@ -21,33 +21,62 @@ struct CommandCenterView: View {
     @State var systemContext = SystemContext()
     @Environment(ProactiveService.self) var proactiveService
 
+    /// Font scale for high-DPI displays (5K2K etc.)
+    private let fontScale: CGFloat = 1.5
+
+    /// Font size helper
+    private func fs(_ size: CGFloat) -> CGFloat { size * fontScale }
+
     var body: some View {
-        HStack(spacing: 0) {
-            // Left: Context Panel
-            contextPanel
-                .frame(width: 240)
+        ZStack {
+            // Background: black base
+            Color.black.ignoresSafeArea()
 
-            // Vertical divider
-            Rectangle()
-                .fill(Color.purple.opacity(0.3))
-                .frame(width: 1)
+            // Samantha icon as centered background with low opacity
+            Image("SamanthaIcon")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: 800)
+                .opacity(0.18)
+                .blur(radius: 2)
+                .ignoresSafeArea()
 
-            // Center: Chat
-            chatPanel
+            // Radial glow overlay
+            RadialGradient(
+                colors: [Color.orange.opacity(0.08), Color.clear],
+                center: .center,
+                startRadius: 100,
+                endRadius: 600
+            )
+            .ignoresSafeArea()
 
-            // Vertical divider
-            Rectangle()
-                .fill(Color.purple.opacity(0.3))
-                .frame(width: 1)
+            // Main 3-panel layout
+            HStack(spacing: 0) {
+                contextPanel
+                    .frame(width: 320)
 
-            // Right: Agent Nexus
-            agentNexusPanel
-                .frame(width: 280)
+                Rectangle()
+                    .fill(Color.purple.opacity(0.3))
+                    .frame(width: 1)
+
+                chatPanel
+
+                Rectangle()
+                    .fill(Color.purple.opacity(0.3))
+                    .frame(width: 1)
+
+                agentNexusPanel
+                    .frame(width: 360)
+            }
         }
-        .background(Color.black)
         .preferredColorScheme(.dark)
         .task { await refreshSystemContext() }
         .task { proactiveService.startMonitoring() }
+    }
+
+    /// Semi-transparent panel background
+    private var panelBackground: Color {
+        Color.black.opacity(0.72)
     }
 
     // MARK: - Left: Context Panel
@@ -57,24 +86,25 @@ struct CommandCenterView: View {
             // Header
             HStack {
                 Image(systemName: "cpu")
+                    .font(.system(size: fs(14)))
                     .foregroundStyle(.cyan)
                 Text("SYSTEM CONTEXT")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(.system(size: fs(11), weight: .bold, design: .monospaced))
                     .foregroundStyle(.cyan)
                 Spacer()
                 Circle()
                     .fill(.green)
-                    .frame(width: 6, height: 6)
+                    .frame(width: 8, height: 8)
                 Text("LIVE")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(.system(size: fs(10), weight: .bold, design: .monospaced))
                     .foregroundStyle(.green)
             }
-            .padding(12)
+            .padding(14)
 
             Divider().overlay(Color.cyan.opacity(0.3))
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 16) {
                     contextRow(icon: "clock", label: "TIME", value: systemContext.time, color: .purple)
                     contextRow(icon: "calendar", label: "DAY", value: systemContext.day, color: .purple)
                     contextRow(icon: "battery.75percent", label: "BATTERY", value: systemContext.battery, color: batteryColor)
@@ -84,43 +114,44 @@ struct CommandCenterView: View {
                     Divider().overlay(Color.purple.opacity(0.2))
 
                     Text("RUNNING APPS")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(.system(size: fs(11), weight: .bold, design: .monospaced))
                         .foregroundStyle(.gray)
 
                     Text(systemContext.runningApps)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.gray.opacity(0.8))
+                        .font(.system(size: fs(11), design: .monospaced))
+                        .foregroundStyle(.gray.opacity(0.85))
                         .lineLimit(15)
 
                     Divider().overlay(Color.purple.opacity(0.2))
 
                     // Proactive suggestion
                     if let suggestion = proactiveService.pendingSuggestion {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Image(systemName: "lightbulb.fill")
+                                    .font(.system(size: fs(11)))
                                     .foregroundStyle(.yellow)
                                 Text("INSIGHT")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .font(.system(size: fs(11), weight: .bold, design: .monospaced))
                                     .foregroundStyle(.yellow)
                             }
                             Text(suggestion)
-                                .font(.system(size: 10))
+                                .font(.system(size: fs(12)))
                                 .foregroundStyle(.yellow.opacity(0.9))
                         }
-                        .padding(10)
+                        .padding(12)
                         .background(Color.yellow.opacity(0.08))
-                        .cornerRadius(8)
+                        .cornerRadius(10)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.yellow.opacity(0.2))
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.yellow.opacity(0.3))
                         )
                     }
                 }
-                .padding(12)
+                .padding(14)
             }
         }
-        .background(Color.black.opacity(0.95))
+        .background(panelBackground)
     }
 
     private var batteryColor: Color {
@@ -129,17 +160,17 @@ struct CommandCenterView: View {
     }
 
     private func contextRow(icon: String, label: String, value: String, color: Color) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 11))
+                .font(.system(size: fs(14)))
                 .foregroundStyle(color)
-                .frame(width: 16)
-            VStack(alignment: .leading, spacing: 1) {
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .font(.system(size: fs(10), weight: .bold, design: .monospaced))
                     .foregroundStyle(.gray)
                 Text(value.isEmpty ? "—" : value)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: fs(13), design: .monospaced))
                     .foregroundStyle(.white)
             }
         }
@@ -152,51 +183,51 @@ struct CommandCenterView: View {
             // Header
             HStack {
                 Image(systemName: "sparkles")
-                    .font(.title2)
+                    .font(.system(size: fs(22)))
                     .foregroundStyle(
                         LinearGradient(colors: [.purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("SAMANTHA")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .font(.system(size: fs(16), weight: .bold, design: .monospaced))
                         .foregroundStyle(.white)
                     Text("Proactive AI Command Center")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: fs(11), design: .monospaced))
                         .foregroundStyle(.purple.opacity(0.7))
                 }
                 Spacer()
-                HStack(spacing: 12) {
+                HStack(spacing: 14) {
                     statusPill("RAG", color: .green)
                     statusPill("TTS", color: audioService.isSpeaking ? .orange : .green)
                     statusPill("TOOLS", color: .green)
                 }
             }
-            .padding(14)
-            .background(Color.black)
+            .padding(16)
+            .background(panelBackground)
 
             Divider().overlay(Color.purple.opacity(0.3))
 
             // Messages
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
+                    LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(messages) { msg in
-                            CommandCenterBubble(message: msg)
+                            CommandCenterBubble(message: msg, fontScale: fontScale)
                                 .id(msg.id)
                         }
 
                         if isLoading {
-                            HStack(spacing: 8) {
+                            HStack(spacing: 10) {
                                 ProgressView().controlSize(.small).tint(.purple)
                                 Text("処理中…")
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(.system(size: fs(12), design: .monospaced))
                                     .foregroundStyle(.purple)
                             }
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, 18)
                             .id("loading")
                         }
                     }
-                    .padding(16)
+                    .padding(18)
                 }
                 .onChange(of: messages.count) {
                     withAnimation(.easeOut(duration: 0.2)) {
@@ -214,47 +245,47 @@ struct CommandCenterView: View {
             Divider().overlay(Color.purple.opacity(0.3))
 
             // Input
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(.system(size: fs(14), weight: .bold, design: .monospaced))
                     .foregroundStyle(.purple)
 
                 TextField("コマンドまたはメッセージを入力…", text: $inputText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(.system(size: fs(14), design: .monospaced))
                     .foregroundStyle(.white)
                     .disabled(isLoading)
                     .onSubmit { sendFromCommandCenter() }
 
                 if isLoading {
-                    ProgressView().controlSize(.mini).tint(.purple)
+                    ProgressView().controlSize(.small).tint(.purple)
                 } else {
                     Button(action: sendFromCommandCenter) {
                         Image(systemName: "arrow.up.circle.fill")
-                            .font(.title3)
+                            .font(.system(size: fs(22)))
                             .foregroundStyle(.purple)
                     }
                     .buttonStyle(.plain)
                     .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .padding(12)
-            .background(Color.black)
+            .padding(14)
+            .background(panelBackground)
         }
-        .background(Color(white: 0.05))
+        .background(Color.black.opacity(0.55))
     }
 
     private func statusPill(_ label: String, color: Color) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 5, height: 5)
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 7, height: 7)
             Text(label)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(.system(size: fs(10), weight: .bold, design: .monospaced))
                 .foregroundStyle(color)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(color.opacity(0.1))
-        .cornerRadius(4)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.12))
+        .cornerRadius(5)
     }
 
     // MARK: - Right: Agent Nexus
@@ -263,52 +294,52 @@ struct CommandCenterView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Image(systemName: "point.3.connected.trianglepath.dotted")
+                    .font(.system(size: fs(14)))
                     .foregroundStyle(.pink)
                 Text("AGENT NEXUS")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(.system(size: fs(11), weight: .bold, design: .monospaced))
                     .foregroundStyle(.pink)
                 Spacer()
             }
-            .padding(12)
+            .padding(14)
 
             Divider().overlay(Color.pink.opacity(0.3))
 
             ScrollView {
-                VStack(spacing: 10) {
+                VStack(spacing: 12) {
                     ForEach(agentStates) { agent in
-                        AgentCard(agent: agent)
+                        AgentCard(agent: agent, fontScale: fontScale)
                     }
                 }
-                .padding(12)
+                .padding(14)
             }
 
             Divider().overlay(Color.pink.opacity(0.3))
 
             // Agent flow visualization
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("FLOW")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(.system(size: fs(11), weight: .bold, design: .monospaced))
                     .foregroundStyle(.gray)
 
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     ForEach(agentStates) { agent in
-                        HStack(spacing: 2) {
+                        HStack(spacing: 3) {
                             Circle()
                                 .fill(agent.status == .active ? agent.color : .gray.opacity(0.3))
-                                .frame(width: 8, height: 8)
+                                .frame(width: 11, height: 11)
                             if agent.id != agentStates.last?.id {
                                 Image(systemName: "arrow.right")
-                                    .font(.system(size: 7))
+                                    .font(.system(size: fs(9)))
                                     .foregroundStyle(.gray.opacity(0.5))
                             }
                         }
                     }
                 }
             }
-            .padding(12)
-            .background(Color.black)
+            .padding(14)
         }
-        .background(Color.black.opacity(0.95))
+        .background(panelBackground)
     }
 
     // MARK: - Send message
@@ -558,50 +589,53 @@ struct SystemContext {
 
 struct AgentCard: View {
     let agent: AgentState
+    var fontScale: CGFloat = 1.0
+
+    private func fs(_ size: CGFloat) -> CGFloat { size * fontScale }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill(agent.status == .active ? agent.color.opacity(0.2) : Color.gray.opacity(0.1))
-                    .frame(width: 36, height: 36)
+                    .frame(width: fs(44), height: fs(44))
                 if agent.status == .active {
                     Circle()
-                        .stroke(agent.color.opacity(0.5), lineWidth: 1)
-                        .frame(width: 36, height: 36)
+                        .stroke(agent.color.opacity(0.5), lineWidth: 1.5)
+                        .frame(width: fs(44), height: fs(44))
                 }
                 Image(systemName: agent.icon)
-                    .font(.system(size: 14))
+                    .font(.system(size: fs(16)))
                     .foregroundStyle(agent.status == .active ? agent.color : .gray)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(agent.name)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.system(size: fs(13), weight: .bold, design: .monospaced))
                     .foregroundStyle(agent.status == .active ? .white : .gray)
                 Text(agent.role)
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.gray.opacity(0.7))
+                    .font(.system(size: fs(11), design: .monospaced))
+                    .foregroundStyle(.gray.opacity(0.75))
             }
 
             Spacer()
 
             Text(agent.status.rawValue)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(.system(size: fs(10), weight: .bold, design: .monospaced))
                 .foregroundStyle(agent.status == .active ? agent.color : .gray.opacity(0.5))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
                 .background(
-                    (agent.status == .active ? agent.color : Color.gray).opacity(0.1)
+                    (agent.status == .active ? agent.color : Color.gray).opacity(0.12)
                 )
-                .cornerRadius(3)
+                .cornerRadius(4)
         }
-        .padding(10)
-        .background(Color.white.opacity(0.03))
-        .cornerRadius(8)
+        .padding(12)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(10)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(agent.status == .active ? agent.color.opacity(0.3) : Color.clear)
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(agent.status == .active ? agent.color.opacity(0.4) : Color.clear)
         )
     }
 }
@@ -610,24 +644,27 @@ struct AgentCard: View {
 
 struct CommandCenterBubble: View {
     let message: Message
+    var fontScale: CGFloat = 1.0
+
+    private func fs(_ size: CGFloat) -> CGFloat { size * fontScale }
 
     var body: some View {
         HStack {
             if message.isUser { Spacer(minLength: 60) }
 
-            VStack(alignment: message.isUser ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: message.isUser ? .trailing : .leading, spacing: 5) {
                 if !message.isUser {
                     Text("SAMANTHA")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .font(.system(size: fs(10), weight: .bold, design: .monospaced))
                         .foregroundStyle(.purple.opacity(0.6))
                 }
                 Text(message.text)
-                    .font(.system(size: 12))
+                    .font(.system(size: fs(14)))
                     .textSelection(.enabled)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
                     .background(bubbleBackground)
-                    .cornerRadius(12)
+                    .cornerRadius(14)
                     .foregroundStyle(message.isError ? .red : .white)
             }
 
@@ -637,7 +674,7 @@ struct CommandCenterBubble: View {
 
     private var bubbleBackground: some ShapeStyle {
         if message.isError { return AnyShapeStyle(Color.red.opacity(0.15)) }
-        if message.isUser { return AnyShapeStyle(Color.purple.opacity(0.25)) }
-        return AnyShapeStyle(Color.white.opacity(0.06))
+        if message.isUser { return AnyShapeStyle(Color.purple.opacity(0.28)) }
+        return AnyShapeStyle(Color.white.opacity(0.08))
     }
 }

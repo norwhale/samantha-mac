@@ -41,54 +41,73 @@ struct ContentView: View {
     /// Global timeout for the entire send → response cycle (seconds).
     private let globalTimeout: UInt64 = 60
 
+    /// Font scale for readability on high-DPI displays
+    private let fontScale: CGFloat = 1.25
+    private func fs(_ size: CGFloat) -> CGFloat { size * fontScale }
+
     private var isInputDisabled: Bool { isLoading || audioService.isRecording }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with tab switcher
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.purple)
+        ZStack {
+            // Background: dark base
+            Color.black.opacity(0.92).ignoresSafeArea()
 
-                tabButton("Chat", tab: .chat)
-                tabButton("Insights", tab: .insights, badge: proactiveService.pendingSuggestion != nil)
-                tabButton("Logs", tab: .logs)
+            // Samantha icon as background with low opacity
+            Image("SamanthaIcon")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: 280)
+                .opacity(0.12)
+                .blur(radius: 1)
 
-                Spacer()
-
-                // Command Center button
-                Button {
-                    WindowManager.shared.openCommandCenter(proactiveService: proactiveService)
-                } label: {
-                    Image(systemName: "rectangle.expand.vertical")
-                        .font(.caption)
+            VStack(spacing: 0) {
+                // Header with tab switcher
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: fs(14)))
                         .foregroundStyle(.purple)
+
+                    tabButton("Chat", tab: .chat)
+                    tabButton("Insights", tab: .insights, badge: proactiveService.pendingSuggestion != nil)
+                    tabButton("Logs", tab: .logs)
+
+                    Spacer()
+
+                    // Command Center button
+                    Button {
+                        WindowManager.shared.openCommandCenter(proactiveService: proactiveService)
+                    } label: {
+                        Image(systemName: "rectangle.expand.vertical")
+                            .font(.system(size: fs(13)))
+                            .foregroundStyle(.purple)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open Command Center")
                 }
-                .buttonStyle(.plain)
-                .help("Open Command Center")
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
 
-            Divider()
+                Divider()
 
-            switch currentTab {
-            case .chat: chatView
-            case .insights: insightsView
-            case .logs: logsView
+                switch currentTab {
+                case .chat: chatView
+                case .insights: insightsView
+                case .logs: logsView
+                }
             }
         }
+        .preferredColorScheme(.dark)
         .task { proactiveService.startMonitoring() }
     }
 
     private func tabButton(_ title: String, tab: AppTab, badge: Bool = false) -> some View {
         Button { currentTab = tab } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: 4) {
                 Text(title)
-                    .font(.caption.weight(currentTab == tab ? .bold : .regular))
+                    .font(.system(size: fs(11), weight: currentTab == tab ? .bold : .regular))
                     .foregroundStyle(currentTab == tab ? .purple : .secondary)
                 if badge {
-                    Circle().fill(.red).frame(width: 6, height: 6)
+                    Circle().fill(.red).frame(width: 7, height: 7)
                 }
             }
         }
@@ -104,47 +123,47 @@ struct ContentView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "lightbulb.fill")
                         .foregroundStyle(.yellow)
-                        .font(.caption)
-                    Text(suggestion).font(.caption).lineLimit(2)
+                        .font(.system(size: fs(11)))
+                    Text(suggestion).font(.system(size: fs(11))).lineLimit(2)
                     Spacer(minLength: 4)
                     Button { currentTab = .insights } label: {
-                        Text("詳細").font(.caption2).foregroundStyle(.purple)
+                        Text("詳細").font(.system(size: fs(10))).foregroundStyle(.purple)
                     }.buttonStyle(.plain)
                     Button { proactiveService.pendingSuggestion = nil } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).font(.caption)
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).font(.system(size: fs(11)))
                     }.buttonStyle(.plain)
                 }
-                .padding(8)
-                .background(Color.yellow.opacity(0.1))
-                .cornerRadius(8)
-                .padding(.horizontal, 8)
-                .padding(.top, 4)
+                .padding(10)
+                .background(Color.yellow.opacity(0.12))
+                .cornerRadius(10)
+                .padding(.horizontal, 10)
+                .padding(.top, 6)
             }
 
             // Chat history
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
+                    LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(messages) { message in
-                            ChatBubble(message: message)
+                            ChatBubble(message: message, fontScale: fontScale)
                                 .id(message.id)
                         }
 
                         if isLoading {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
-                                Text("考え中…").font(.caption).foregroundStyle(.secondary)
+                                Text("考え中…").font(.system(size: fs(11))).foregroundStyle(.secondary)
                             }
-                            .padding(.horizontal, 10)
+                            .padding(.horizontal, 12)
                             .id("loading")
                         }
 
                         if audioService.isSpeaking {
-                            HStack(spacing: 6) {
-                                Image(systemName: "speaker.wave.2.fill").foregroundStyle(.purple).font(.caption)
-                                Text("読み上げ中…").font(.caption).foregroundStyle(.secondary)
+                            HStack(spacing: 8) {
+                                Image(systemName: "speaker.wave.2.fill").foregroundStyle(.purple).font(.system(size: fs(11)))
+                                Text("読み上げ中…").font(.system(size: fs(11))).foregroundStyle(.secondary)
                             }
-                            .padding(.horizontal, 10)
+                            .padding(.horizontal, 12)
                             .id("speaking")
                         }
 
@@ -155,23 +174,23 @@ struct ContentView: View {
                                 inputText = failedText
                                 sendMessage()
                             } label: {
-                                HStack(spacing: 4) {
+                                HStack(spacing: 5) {
                                     Image(systemName: "arrow.clockwise")
                                     Text("再試行")
                                 }
-                                .font(.caption)
+                                .font(.system(size: fs(11)))
                                 .foregroundStyle(.purple)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.purple.opacity(0.1))
-                                .cornerRadius(8)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(Color.purple.opacity(0.15))
+                                .cornerRadius(10)
                             }
                             .buttonStyle(.plain)
-                            .padding(.horizontal, 10)
+                            .padding(.horizontal, 12)
                             .id("retry")
                         }
                     }
-                    .padding(12)
+                    .padding(14)
                 }
                 .onChange(of: messages.count) { scrollToBottom(proxy: proxy) }
                 .onChange(of: isLoading) { scrollToBottom(proxy: proxy) }
@@ -181,10 +200,10 @@ struct ContentView: View {
             Divider()
 
             // Input area
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button(action: handleAudioButton) {
                     Image(systemName: audioButtonIconName)
-                        .font(.title2)
+                        .font(.system(size: fs(20)))
                         .foregroundStyle(audioButtonColor)
                 }
                 .buttonStyle(.plain)
@@ -192,18 +211,19 @@ struct ContentView: View {
 
                 TextField("メッセージを入力…", text: $inputText)
                     .textFieldStyle(.plain)
+                    .font(.system(size: fs(12)))
                     .disabled(isInputDisabled)
                     .onSubmit { sendMessage() }
 
                 Button(action: sendMessage) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
+                        .font(.system(size: fs(20)))
                         .foregroundStyle(.purple)
                 }
                 .buttonStyle(.plain)
                 .disabled(isInputDisabled || inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .padding(10)
+            .padding(12)
         }
     }
 
@@ -570,31 +590,33 @@ struct SuggestionCard: View {
 
 struct ChatBubble: View {
     let message: Message
+    var fontScale: CGFloat = 1.0
 
     var body: some View {
         HStack {
             if message.isUser { Spacer(minLength: 40) }
 
             Text(message.text)
+                .font(.system(size: 12 * fontScale))
                 .textSelection(.enabled)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(bubbleColor)
-                .cornerRadius(12)
-                .foregroundStyle(message.isError ? .red : .primary)
+                .cornerRadius(14)
+                .foregroundStyle(message.isError ? .red : .white)
 
             if !message.isUser { Spacer(minLength: 40) }
         }
     }
 
     private var bubbleColor: Color {
-        if message.isError { return Color.red.opacity(0.1) }
-        return message.isUser ? Color.purple.opacity(0.2) : Color.gray.opacity(0.15)
+        if message.isError { return Color.red.opacity(0.15) }
+        return message.isUser ? Color.purple.opacity(0.28) : Color.white.opacity(0.08)
     }
 }
 
 #Preview {
     ContentView()
         .environment(ProactiveService())
-        .frame(width: 300, height: 400)
+        .frame(width: 380, height: 500)
 }
