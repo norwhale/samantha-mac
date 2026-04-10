@@ -13,6 +13,8 @@ nonisolated struct OllamaService {
     private static let baseURL = "http://localhost:11434"
     private static let model = "gemma4:31b"
     private static let requestTimeout: TimeInterval = 60
+    /// Fast timeout for orchestrator decisions — fall back to Claude if exceeded
+    private static let orchestratorTimeout: TimeInterval = 12
 
     // MARK: - Public API
 
@@ -34,7 +36,12 @@ nonisolated struct OllamaService {
 
     /// Send a prompt to Gemma 4 31B and get a response.
     /// Used for orchestration: deciding which agents to call and synthesizing results.
-    static func generate(prompt: String, system: String? = nil) async throws -> String {
+    static func generate(
+        prompt: String,
+        system: String? = nil,
+        maxTokens: Int = 1024,
+        timeout: TimeInterval? = nil
+    ) async throws -> String {
         guard let url = URL(string: "\(baseURL)/api/generate") else {
             throw OllamaError.invalidURL
         }
@@ -44,15 +51,15 @@ nonisolated struct OllamaService {
             "prompt": prompt,
             "stream": false,
             "options": [
-                "temperature": 0.7,
-                "num_predict": 1024,
+                "temperature": 0.3,
+                "num_predict": maxTokens,
             ] as [String: Any],
         ]
         if let sys = system { body["system"] = sys }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = requestTimeout
+        request.timeoutInterval = timeout ?? requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -131,52 +138,86 @@ nonisolated struct OllamaService {
 
     // MARK: - Orchestrator: decide which agents to use
 
-    /// The orchestrator analyzes the user's request and returns a plan.
+    /// The orchestrator decides the best approach.
+    /// Returns ONE word only. Heuristic pre-filter skips Gemma for simple queries.
     static func orchestrate(userMessage: String, availableTools: [String]) async throws -> OrchestratorPlan {
-        let system = """
-        You are the Orchestrator — the central brain of Samantha, a personal AI system.
-        Your job is to analyze the user's request and decide the best approach.
-
-        Available specialist agents: \(availableTools.joined(separator: ", "))
-
-        Respond ONLY in this JSON format (no markdown, no explanation):
-        {
-            "approach": "single" or "multi_agent" or "direct",
-            "reasoning": "brief explanation",
-            "agents": ["agent1", "agent2"],
-            "instructions": "specific instructions for the agents"
+        // Pre-filter: skip Gemma entirely for clearly simple or tool-heavy requests
+        if let quickPlan = quickHeuristic(for: userMessage) {
+            AppLogger.shared.log("[Orchestrator] Fast-path: \(quickPlan.approach)")
+            return quickPlan
         }
 
-        Rules:
-        - "direct": You can answer this yourself without any agents.
-        - "single": Route to one specific agent (e.g., "gmail" for email, "calendar" for schedule).
-        - "multi_agent": Complex question needing multiple perspectives.
-        - Always prefer "direct" for simple questions (greetings, opinions, general chat).
-        - Use "multi_agent" only for analysis, comparison, or research tasks.
+        // Minimal prompt — only ask for one word, 10 tokens max
+        let system = """
+        You route user requests. Reply with ONE word only:
+        - TOOL: needs tools (email, calendar, shell, file, app control, system info)
+        - ANALYZE: needs multi-perspective analysis or comparison
+        - CHAT: simple conversation, greetings, opinions, feelings
         """
 
-        let response = try await generate(prompt: userMessage, system: system)
+        do {
+            let response = try await generate(
+                prompt: userMessage,
+                system: system,
+                maxTokens: 10,
+                timeout: orchestratorTimeout
+            )
 
-        // Parse JSON response
-        guard let data = response.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            // Fallback: if Gemma doesn't return valid JSON, use direct approach
-            return OrchestratorPlan(approach: .direct, reasoning: "Fallback", agents: [], instructions: response)
+            let upper = response.uppercased()
+            let approach: OrchestratorPlan.Approach = {
+                if upper.contains("TOOL") { return .single }
+                if upper.contains("ANALYZE") { return .multiAgent }
+                return .direct
+            }()
+
+            AppLogger.shared.log("[Orchestrator] Gemma decision: \(response.prefix(20)) → \(approach)")
+            return OrchestratorPlan(approach: approach, reasoning: response, agents: [], instructions: "")
+        } catch {
+            // Gemma timed out or errored — fall back to Claude with tools
+            AppLogger.shared.log("[Orchestrator] Gemma failed: \(error.localizedDescription) → Claude fallback", isError: true)
+            return OrchestratorPlan(approach: .single, reasoning: "Gemma fallback", agents: [], instructions: "")
+        }
+    }
+
+    // MARK: - Quick heuristic (skip Gemma for obvious cases)
+
+    private static func quickHeuristic(for message: String) -> OrchestratorPlan? {
+        let lower = message.lowercased()
+
+        // Tool-heavy keywords: route directly to Claude (with tools)
+        let toolKeywords = [
+            "gmail", "メール", "未読", "mail",
+            "カレンダー", "予定", "calendar", "event",
+            "spotify", "曲", "音楽", "music", "再生", "停止", "次の",
+            "開いて", "起動", "open", "launch",
+            "ファイル", "file", "ディスク", "disk", "ssd",
+            "バッテリー", "battery",
+            "アプリ", "app",
+            "シェル", "shell", "コマンド", "command",
+            "ブラウザ", "browser", "url",
+        ]
+        if toolKeywords.contains(where: lower.contains) {
+            return OrchestratorPlan(approach: .single, reasoning: "Tool keyword matched", agents: [], instructions: "")
         }
 
-        let approachStr = json["approach"] as? String ?? "direct"
-        let approach: OrchestratorPlan.Approach = switch approachStr {
-        case "multi_agent": .multiAgent
-        case "single": .single
-        default: .direct
+        // Analysis keywords: route to multi-agent
+        let analyzeKeywords = [
+            "分析", "analyze", "analysis",
+            "比較", "compare", "vs",
+            "多角", "観点", "視点", "perspective",
+            "メリット デメリット", "pros cons",
+        ]
+        if analyzeKeywords.contains(where: lower.contains) {
+            return OrchestratorPlan(approach: .multiAgent, reasoning: "Analysis keyword matched", agents: [], instructions: "")
         }
 
-        return OrchestratorPlan(
-            approach: approach,
-            reasoning: json["reasoning"] as? String ?? "",
-            agents: json["agents"] as? [String] ?? [],
-            instructions: json["instructions"] as? String ?? ""
-        )
+        // Very short simple messages (greetings, thanks) → direct Gemma chat
+        let simplePatterns = ["こんにちは", "おはよう", "こんばんは", "ありがとう", "hello", "hi", "thanks", "thank you"]
+        if message.count < 20 && simplePatterns.contains(where: lower.contains) {
+            return OrchestratorPlan(approach: .direct, reasoning: "Simple greeting", agents: [], instructions: "")
+        }
+
+        return nil  // Let Gemma decide
     }
 
     // MARK: - Errors

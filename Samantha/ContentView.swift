@@ -457,15 +457,14 @@ struct ContentView: View {
                             AppLogger.shared.log("[Orchestrator] Plan: \(plan.approach) — \(plan.reasoning)")
 
                             switch plan.approach {
-                            case .direct:
-                                // Gemma answers directly
-                                return try await OllamaService.chat(
-                                    messages: capturedHistory,
-                                    system: "あなたはSamantha。Yuichiの専属AIアシスタント。日本語で簡潔に回答。"
-                                )
+                            case .direct, .single:
+                                // Route to Claude — it's 10x faster than Gemma
+                                // direct = simple chat, single = tool use, both go to Claude
+                                let ragContext = await Self.fetchRAGContext(query: capturedText)
+                                return try await ChatService.send(history: capturedHistory, ragContext: ragContext)
 
                             case .multiAgent:
-                                // Gemma delegates to multi-agent analysis
+                                // Multi-agent analysis via Claude specialists
                                 let perspectives = plan.agents.isEmpty
                                     ? ["技術の専門家", "戦略アナリスト", "実務コンサルタント"]
                                     : plan.agents
@@ -473,11 +472,6 @@ struct ContentView: View {
                                     question: capturedText,
                                     perspectives: perspectives
                                 )
-
-                            case .single:
-                                // Route to Claude with tools (Gmail, Calendar, Shell, etc.)
-                                let ragContext = await Self.fetchRAGContext(query: capturedText)
-                                return try await ChatService.send(history: capturedHistory, ragContext: ragContext)
                             }
                         } else {
                             // Fallback: Claude handles everything (original flow)
