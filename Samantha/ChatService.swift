@@ -46,10 +46,27 @@ nonisolated struct ChatService {
     - You have access to `execute_shell_command` to run shell commands on the user's Mac.
     - Use it proactively when the user asks about system info, files, processes, etc.
     - For controlling apps (Spotify, Finder, Safari, etc.), use `osascript -e` with AppleScript.
-      Examples:
-        - Pause Spotify: osascript -e 'tell application "Spotify" to pause'
-        - Play Spotify:  osascript -e 'tell application "Spotify" to play'
-        - Get track:     osascript -e 'tell application "Spotify" to name of current track'
+      Basic Spotify commands:
+        - Pause:        osascript -e 'tell application "Spotify" to pause'
+        - Play:         osascript -e 'tell application "Spotify" to play'
+        - Next track:   osascript -e 'tell application "Spotify" to next track'
+        - Get current:  osascript -e 'tell application "Spotify" to name of current track'
+        - Set volume:   osascript -e 'tell application "Spotify" to set sound volume to 50'
+      Play specific content on Spotify (USE THIS when user asks for specific mood/genre):
+        - Use `spotify:` URIs via `play track "spotify:..."`
+        - Search + play first result: first open the URL (Spotify handles it)
+        - Example (lo-fi playlist): osascript -e 'tell application "Spotify" to play track "spotify:playlist:37i9dQZF1DWWQRwui0ExPn"'
+        - Example (classical focus): osascript -e 'tell application "Spotify" to play track "spotify:playlist:37i9dQZF1DX8NTLI2TtZa6"'
+        - Example (ambient chill): osascript -e 'tell application "Spotify" to play track "spotify:playlist:37i9dQZF1DX3Ogo9pFvBkY"'
+        - For other moods, use `open "https://open.spotify.com/search/<query>"` then let the user click
+      Mood → Playlist mapping (use these when user asks for a vibe):
+        - 落ち着く / relaxing / chill → lo-fi beats (spotify:playlist:37i9dQZF1DWWQRwui0ExPn)
+        - 集中 / focus / study → Deep Focus (spotify:playlist:37i9dQZF1DWZeKCadgRdKQ)
+        - ambient → Ambient Chill (spotify:playlist:37i9dQZF1DX3Ogo9pFvBkY)
+        - classical → Classical Focus (spotify:playlist:37i9dQZF1DX8NTLI2TtZa6)
+      IMPORTANT: When the user asks for a MOOD (落ち着く曲、chill、relaxing, etc.), do NOT just `play` — play a specific playlist.
+
+      Other commands:
         - Open app:      open -a "AppName"
         - Brightness, volume, etc. can also be controlled via shell.
     - Always summarise command output in a user-friendly way — do not dump raw output.
