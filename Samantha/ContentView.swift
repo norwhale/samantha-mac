@@ -104,11 +104,14 @@ struct ContentView: View {
 
                 Divider().overlay(Color.purple.opacity(0.4))
 
-                switch currentTab {
-                case .chat: chatView
-                case .insights: insightsView
-                case .logs: logsView
+                Group {
+                    switch currentTab {
+                    case .chat: chatView
+                    case .insights: insightsView
+                    case .logs: logsView
+                    }
                 }
+                .background(Color.black.opacity(0.35))
             }
         }
         .preferredColorScheme(.dark)
@@ -242,6 +245,8 @@ struct ContentView: View {
                 TextField("メッセージを入力…", text: $inputText)
                     .textFieldStyle(.plain)
                     .font(.system(size: fs(12)))
+                    .foregroundStyle(.white)
+                    .tint(.purple)
                     .disabled(isInputDisabled)
                     .onSubmit { sendMessage() }
 
@@ -263,24 +268,32 @@ struct ContentView: View {
         VStack(spacing: 0) {
             if proactiveService.suggestionHistory.isEmpty {
                 Spacer()
-                VStack(spacing: 8) {
-                    Image(systemName: "lightbulb").font(.largeTitle).foregroundStyle(.secondary)
-                    Text("まだ提案はありません").font(.caption).foregroundStyle(.secondary)
+                VStack(spacing: 10) {
+                    Image(systemName: "lightbulb")
+                        .font(.system(size: fs(32)))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text("まだ提案はありません")
+                        .font(.system(size: fs(12)))
+                        .foregroundStyle(.white.opacity(0.7))
                     Text("Samanthaが5分ごとに状況を分析し、\n提案があればここに表示されます。")
-                        .font(.caption2).foregroundStyle(.tertiary).multilineTextAlignment(.center)
+                        .font(.system(size: fs(10)))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .multilineTextAlignment(.center)
                 }
+                .frame(maxWidth: .infinity)
                 Spacer()
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
+                    LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(proactiveService.suggestionHistory) { suggestion in
                             SuggestionCard(suggestion: suggestion)
                         }
                     }
-                    .padding(12)
+                    .padding(14)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { proactiveService.pendingSuggestion = nil }
     }
 
@@ -289,26 +302,32 @@ struct ContentView: View {
     private var logsView: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Debug Logs").font(.caption.bold())
+                Text("Debug Logs")
+                    .font(.system(size: fs(11), weight: .bold))
+                    .foregroundStyle(.white.opacity(0.9))
                 Spacer()
                 Button("Clear") { AppLogger.shared.clear() }
-                    .font(.caption2).buttonStyle(.plain).foregroundStyle(.red)
+                    .font(.system(size: fs(10)))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.red)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: 3) {
                     ForEach(AppLogger.shared.entries) { entry in
                         Text(entry.text)
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(entry.isError ? .red : .secondary)
+                            .font(.system(size: fs(10), design: .monospaced))
+                            .foregroundStyle(entry.isError ? Color.red : Color.white.opacity(0.75))
                             .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .padding(8)
+                .padding(10)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Audio controls
@@ -600,18 +619,29 @@ struct SuggestionCard: View {
     let suggestion: Suggestion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: "lightbulb.fill").foregroundStyle(.yellow).font(.caption2)
+                Image(systemName: "lightbulb.fill")
+                    .foregroundStyle(.yellow)
+                    .font(.caption)
                 Text(suggestion.timestamp, format: .dateTime.month().day().hour().minute())
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
                 Spacer()
             }
-            Text(suggestion.text).font(.caption).textSelection(.enabled)
+            Text(suggestion.text)
+                .font(.system(size: 13))
+                .foregroundStyle(.white)
+                .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(10)
-        .background(Color.yellow.opacity(0.06))
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.black.opacity(0.75))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.yellow.opacity(0.4), lineWidth: 1)
+        )
         .cornerRadius(10)
     }
 }
