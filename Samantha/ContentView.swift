@@ -50,22 +50,32 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             // Background: dark base
-            Color.black.opacity(0.92).ignoresSafeArea()
+            Color.black.ignoresSafeArea()
 
-            // Samantha icon as background with low opacity
+            // Samantha icon as background — more prominent
             Image("SamanthaIcon")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: 280)
-                .opacity(0.12)
-                .blur(radius: 1)
+                .frame(maxWidth: 360)
+                .opacity(0.35)
+                .ignoresSafeArea()
+
+            // Subtle gradient overlay for text readability
+            LinearGradient(
+                colors: [Color.black.opacity(0.45), Color.black.opacity(0.25), Color.black.opacity(0.45)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Header with tab switcher
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: fs(14)))
-                        .foregroundStyle(.purple)
+                        .font(.system(size: fs(15)))
+                        .foregroundStyle(
+                            LinearGradient(colors: [.purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
 
                     tabButton("Chat", tab: .chat)
                     tabButton("Insights", tab: .insights, badge: proactiveService.pendingSuggestion != nil)
@@ -78,16 +88,17 @@ struct ContentView: View {
                         WindowManager.shared.openCommandCenter(proactiveService: proactiveService)
                     } label: {
                         Image(systemName: "rectangle.expand.vertical")
-                            .font(.system(size: fs(13)))
-                            .foregroundStyle(.purple)
+                            .font(.system(size: fs(14), weight: .semibold))
+                            .foregroundStyle(Color(red: 0.75, green: 0.5, blue: 1.0))
                     }
                     .buttonStyle(.plain)
                     .help("Open Command Center")
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                .background(Color.black.opacity(0.55))
 
-                Divider()
+                Divider().overlay(Color.purple.opacity(0.4))
 
                 switch currentTab {
                 case .chat: chatView
@@ -102,14 +113,26 @@ struct ContentView: View {
 
     private func tabButton(_ title: String, tab: AppTab, badge: Bool = false) -> some View {
         Button { currentTab = tab } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Text(title)
-                    .font(.system(size: fs(11), weight: currentTab == tab ? .bold : .regular))
-                    .foregroundStyle(currentTab == tab ? .purple : .secondary)
+                    .font(.system(size: fs(12), weight: currentTab == tab ? .bold : .medium))
+                    .foregroundStyle(
+                        currentTab == tab
+                            ? Color(red: 0.82, green: 0.56, blue: 1.0)
+                            : Color.white.opacity(0.6)
+                    )
                 if badge {
-                    Circle().fill(.red).frame(width: 7, height: 7)
+                    Circle().fill(.red).frame(width: 8, height: 8)
                 }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                currentTab == tab
+                    ? Color.purple.opacity(0.18)
+                    : Color.clear
+            )
+            .cornerRadius(6)
         }
         .buttonStyle(.plain)
     }

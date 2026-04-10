@@ -32,21 +32,20 @@ struct CommandCenterView: View {
             // Background: black base
             Color.black.ignoresSafeArea()
 
-            // Samantha icon as centered background with low opacity
+            // Samantha icon as centered background — more prominent
             Image("SamanthaIcon")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: 800)
-                .opacity(0.18)
-                .blur(radius: 2)
+                .frame(maxWidth: 1100)
+                .opacity(0.45)
                 .ignoresSafeArea()
 
-            // Radial glow overlay
+            // Radial glow overlay (orange pulse in center)
             RadialGradient(
-                colors: [Color.orange.opacity(0.08), Color.clear],
+                colors: [Color.orange.opacity(0.18), Color.clear],
                 center: .center,
-                startRadius: 100,
-                endRadius: 600
+                startRadius: 150,
+                endRadius: 700
             )
             .ignoresSafeArea()
 
@@ -74,9 +73,9 @@ struct CommandCenterView: View {
         .task { proactiveService.startMonitoring() }
     }
 
-    /// Semi-transparent panel background
+    /// Semi-transparent panel background — shows icon behind
     private var panelBackground: Color {
-        Color.black.opacity(0.72)
+        Color.black.opacity(0.55)
     }
 
     // MARK: - Left: Context Panel
@@ -272,7 +271,7 @@ struct CommandCenterView: View {
             .padding(14)
             .background(panelBackground)
         }
-        .background(Color.black.opacity(0.55))
+        .background(Color.black.opacity(0.35))
     }
 
     private func statusPill(_ label: String, color: Color) -> some View {
